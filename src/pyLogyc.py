@@ -1,44 +1,50 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-##This file is part of pySequence
+##This file is part of pyLogyc
 #############################################################################
 #############################################################################
 ##                                                                         ##
-##                                   logyc                                 ##
+##                                  pyLogyc                                ##
 ##                                                                         ##
 #############################################################################
 #############################################################################
 
-## Copyright (C) 2012 Cédrick FAURY
+## Copyright (C) 2012-2013 Cédrick FAURY
 
-#    logyc is free software; you can redistribute it and/or modify
+#    pyLogyc is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
 #    the Free Software Foundation; either version 3 of the License, or
 #    (at your option) any later version.
     
-#    logyc is distributed in the hope that it will be useful,
+#    pyLogyc is distributed in the hope that it will be useful,
 #    but WITHOUT ANY WARRANTY; without even the implied warranty of
 #    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #    GNU General Public License for more details.
 #
 #    You should have received a copy of the GNU General Public License
-#    along with logyc; if not, write to the Free Software
+#    along with pyLogyc; if not, write to the Free Software
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 """
-logyc.py
+pyLogyc.py
 Copyright (C) 2011-2012  
 @author: Cedrick FAURY
 
 """
-__appname__= "logyc"
+__appname__= "pyLogyc"
 __author__ = u"Cédrick FAURY"
-__version__ = "0.1"
+__version__ = "0.2"
 
-#import re
+#
+# Import des modules nécessaires
+#
+
+# GUI
 import wx
-import scipy
+
+# Calcul scientifique
+#import scipy
 
 #########################################################################################################
 #########################################################################################################
@@ -83,21 +89,24 @@ GREEK = ['alpha', 'beta', 'chi', 'delta', 'epsilon', 'gamma', 'lambda', 'mu', 'n
          'phi', 'psi', 'rho', 'sigma', 'tau', 'theta', 'xi', 'Delta', 'Gamma', 'Lambda', 'Omega', \
          'Phi', 'Psi', 'Sigma', 'Theta', 'Xi', 'Nabla', 'pi']
 
-#make a list of safe functions
-safe_list = ['not', 'and', 'xor', 'or']
+# liste des fonctions "sûres"
+safe_list = ['not', 'and', 'or']
 
-from numpy import abs, ceil, cos, cosh, degrees, \
-             exp, fabs, floor, fmod, frexp, hypot, ldexp, log, log10, modf, \
-             pi, radians, sin, sinh, sqrt, tan, tanh, errstate 
-#use the list to filter the local namespace 
+# Utilisation de la liste des fonctions "sûres" pour filtrer l'espace de nom local 
 safe_dict = dict([ (k, locals().get(k, None)) for k in safe_list ])
 
+# liste des fonctions et opérateurs "sûre"
 math_list = safe_list + ['*', '/', '+', '^', '-', '(', ')']
 
 class Expression():
-    """ Expression mathématique 
+    """ Expression mathématique
+        Attributs :
+         - smp_expr : chaine = forme simple de l'expression (/ + . ^)
+         - py_expr : forme évaluable par python (not or and ^)
+         - math : chaine au format LaTeX 
     """
-    def __init__(self, expr = ''):
+    def __init__(self, expr = '', nom = 'S'):
+        self.nom = nom
         self.MiseAJour(expr)
         
         
@@ -227,12 +236,7 @@ class Expression():
                         j += 1
                     continuer2 = False
                     
-                    # On fait si besoin des paquets entre crochets {}
-#                    if i>0 and expr[i-1] == '/':
-#                        expr = expr[0:i-1] + '\overline{' + ssex + '}' + expr[j:]   
-#                        i = j+7+len(ssex)
-#                        print "   /(  ", expr, i
-#                    else:
+                    # On fait un paquet entre crochets {}
                     expr = expr[0:i] + '({' + ssex + '})' + expr[j:]
                     i = i+3+len(ssex)
 #                    print "   (   ", expr, i
@@ -281,25 +285,12 @@ class Expression():
         ex1 = ex1.replace('(', r"\left(")
         ex1 = ex1.replace(')', r"\right)")
         ex1 = ex1.replace('^', r"\oplus ")
-
-        
-        for m in ['abs', 'ceil', 'cos', 'cosh',\
-             'exp', 'fabs', 'floor', 'fmod', 'frexp', 'hypot', 'ldexp', 'log', 'log10', 'modf', \
-             'pi', 'sin', 'sinh', 'sqrt', 'tan', 'tanh']:
-            ex1 = ex1.replace(r"*"+m, r""+m)
             
-            
-        ex1 = ex1.replace('sqrt', r"\sqrt")
+        # Traitement des lettres grecques
         for g in GREEK:
             ex1 = ex1.replace(g, r""+"\\"+g)
         
-            
-        ex1 = ex1.replace('exp', r"e^")
-        
-        
-#        print ex1
-        
-        return 'S='+ex1
+        return self.nom+'='+ex1
         
         
     #########################################################################################################
@@ -333,7 +324,11 @@ class Expression():
     
     #########################################################################################################
     def getTableVerite(self, **args):
-#        v = self.getVariables()
+        """ Renvoie la table de vérité de l'expression sous la forme :
+             - E : Entrées = [[valeurs possibles 1ère variable], ... [valeurs possibles nième variable]] (0 ou 1)
+             - S : Sortie =  [valeurs de sortie]
+            Les variables sont classées par ordre alphabétique.
+        """ 
         E = [[eval(l) for l in int2bin(n, len(self.vari))] for n in range(2**len(self.vari))]
 #        print "entrées", E
         S = []
@@ -352,8 +347,20 @@ class Expression():
 #        print "sortie", S
         return E,S
         
-#        for n, v in self.vari.items():
             
+    #########################################################################################################        
+    def GetBmpHD(self):
+        """ Renvoie une image (wx) en "haute définition"
+        """
+        return mathtext_to_wxbitmap(self.math, 300)
+
+    #########################################################################################################
+    def GetTeX(self):
+        """ Renvoie l'expression sous forme de chaine LaTeX
+        """
+        return self.math
+    
+
 def int2bin(n, count=24):
     """returns the binary of integer n, using count number of digits"""
     return "".join([str((n >> y) & 1) for y in range(count-1, -1, -1)])
@@ -367,13 +374,11 @@ def int2bin(n, count=24):
 #########################################################################################################
 ######################################################################################################### 
 class ScrolledBitmap(wx.ScrolledWindow):
-    def __init__(self, parent, id, lstBmp = [], event = True, synchroAvec = []):
+    def __init__(self, parent, idd, lstBmp = []):
         self.tip = u""
         self.num = 0
-        self.event = event
-        self.synchroAvec = synchroAvec
         
-        wx.ScrolledWindow.__init__(self, parent, id)#, style = wx.BORDER_SIMPLE)
+        wx.ScrolledWindow.__init__(self, parent, idd)#, style = wx.BORDER_SIMPLE)
         self.SetScrollRate(1,0)
         
         self.sb = wx.StaticBitmap(self, -1, wx.NullBitmap)
@@ -390,8 +395,6 @@ class ScrolledBitmap(wx.ScrolledWindow):
         self.lstBmp = lstBmp
         
         self.mouseInfo = None
-        
-        #wx.CURSOR_HAND))
 
         self.sb.Bind(wx.EVT_LEFT_DOWN, self.OnMouseDown)
         self.sb.Bind(wx.EVT_MOTION, self.OnMouseMove)
@@ -400,92 +403,16 @@ class ScrolledBitmap(wx.ScrolledWindow):
         self.sb.Bind(wx.EVT_RIGHT_UP, self.OnRightClick)
         self.Bind(wx.EVT_SIZE, self.OnSize)
         
-#        wx.GetApp().Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
-#        self._processingEvents = False
-        
         self.SetToolTipString()
        
     def __repr__(self):
         return str(self.GetId())
     
-    #########################################################################################################
-    def synchroniserAvec(self, lstScroBmp):
-        self.synchroAvec.extend(lstScroBmp)
-        for ScroBmp in lstScroBmp:
-            ScroBmp.synchroAvec.append(self)
-            ScroBmp.nettoyerLstSynchro()
-        self.nettoyerLstSynchro()
-        
-    #########################################################################################################
-    def nettoyerLstSynchro(self):
-        self.synchroAvec = list(set(self.synchroAvec))
         
     #########################################################################################################
     def sendEvent(self):
         pass
-#        if self.event:
-#            evt = BmpEvent(myEVT_BITMAP_CHANGED, self.GetId())
-#            evt.SetNum(self.num)
-#            evt.SetObj(self)
-#            self.GetEventHandler().ProcessEvent(evt)
-        
-    ######################################################################################################    
-    def OnWheel(self, event = None):
-        return
-        """Watch all app mousewheel events, looking for ones from descendants.
-        
-        If we see a mousewheel event that was unhandled by one of our
-        descendants, we'll take it upon ourselves to handle it.
-        
-        @param  event  The mouse wheel event.
-        """
-        # By default, we won't eat events...
-        wantSkip = True
-        
-        # Avoid recursion--this function will get called during 'ProcessEvent'.
-        if not self._processingEvents:
-#            print "Mousewheel event received at app level"
-            
-            self._processingEvents = True
-            
-            # Check who the event is targetting
-            evtObject = event.GetEventObject()
-            print "...targetting '%s'" % evtObject
-            
-            # We only care about passing up events that were aimed at our
-            # descendants, not us, so only search if it wasn't aimed at us.
-            if evtObject != self:
-                toTest = evtObject.GetParent()
-                while toTest:
-                    if toTest == self:
-                        print "...detected that we are ancestor"
-                        
-                        # We are the "EventObject"'s ancestor, so we'll take
-                        # the event and pass it to our event handler.  Note:
-                        # we don't change the coordinates or evtObject.
-                        # Technically, we should, but our event handler doesn't
-                        # seem to mind.
-                        self.GetEventHandler().ProcessEvent(event)
-                        
-                        # We will _not_ skip here.
-                        wantSkip = False
-                        break
-                    toTest = toTest.GetParent()
-            self._processingEvents = False
-        else:
-            print "...recursive mousewheel event"
-        
-        # Usually, we skip the event and let others handle it, unless it's a
-        # mouse event from our descendant...
-        if wantSkip:
-            event.Skip()
-            
-#        evtObject = event.GetEventObject()
-#        print "OnWheel", event.GetWheelRotation(), evtObject
-#        if evtObject == self.sb:
-#            print "OnWheel"
-        
-        
+
         
     ######################################################################################################    
     def OnRightClick(self, event = None):
@@ -515,10 +442,6 @@ class ScrolledBitmap(wx.ScrolledWindow):
         
         self.PopupMenu(menu)
         menu.Destroy()
-        
-       
-            
-        
         
         
     ######################################################################################################    
@@ -567,8 +490,6 @@ class ScrolledBitmap(wx.ScrolledWindow):
     ######################################################################################################    
     def OnMouseDown(self, event):
         x0, y0 = self.GetViewStart()
-#        x1, y1 = event.GetLogicalPosition()
-#        x, y = self.CalcScrolledPosition(x1, y1)
         x, y = event.GetX(), event.GetY()
         self.mouseInfo = (x,y, x0, y0)
         
@@ -576,9 +497,6 @@ class ScrolledBitmap(wx.ScrolledWindow):
     ######################################################################################################    
     def OnMouseUp(self, event):
         x0, y0 = self.GetViewStart()
-#        x, y = self.CalcScrolledPosition(event.m_x, event.m_y)
-#        x1, y1 = event.GetLogicalPosition()
-#        x, y = self.CalcScrolledPosition(x1, y1)
         x, y = event.GetX(), event.GetY()
         mouseInfo = (x,y, x0, y0)
         if self.mouseInfo == None or self.mouseInfo[0] == mouseInfo[0]:
@@ -586,25 +504,19 @@ class ScrolledBitmap(wx.ScrolledWindow):
             for sb in self.synchroAvec:
                 if sb != self:
                     sb.AugmenterNum(sendEvent = False)
-#                    print sb.GetId()
         self.mouseInfo = None
         
     
     ######################################################################################################    
     def OnMouseMove(self, event):
-        if self.mouseInfo == None: return
-        
-#        x = self.CalcScrolledPosition(event.m_x, event.m_y)[0]
-#        x1, y1 = event.GetLogicalPosition()
-#        x = self.CalcScrolledPosition(x1, y1)[0]
+        if self.mouseInfo == None: 
+            return
         x = event.GetX()
         
         dx = -x+self.mouseInfo[0]
-#        dy = -y+self.mouseInfo[1]
         xu = self.GetScrollPixelsPerUnit()[0]
         
         x0 = self.mouseInfo[2]
-#        y0 = self.mouseInfo[3]
         
         self.Scroll(x0+dx/xu,0)
      
@@ -680,92 +592,13 @@ class ScrolledBitmap(wx.ScrolledWindow):
         if sendEvent:
             self.sendEvent()
         
-#class expression():
-#    """ Expression logique
-#        du type "(not a and b) or (a and c)"
-#    """
-#    def __init__(self, expr = ''):
-#        self.str = self.formater(expr)
-#        
-#    def formater(self, expr):
-#        """ Formate l'expression :
-#            "(not a or b) and b"
-#            -->
-#            "(not %(a)c or %(b)c) and %(b)c"
-#        """
-#        print "formater", expr
-#        expr = self.expr
-#        
-#        for v in self.getVariables(expr):
-#            expr = expr.replace(n, " "*len(n))
-#        lst = expr.split()
-#        lst = list(set(lst))
-#        lst.sort()
-#        print "  ", lst
-#        
-#        dic = {}
-#        for v in lst:
-#            dic[v] = [m.start() for m in re.finditer(v, expr)]
-#        print "  -->", dic
-#        self.var = dic
-#        return dic
-#    
-#    
-#    def getVariables(self, expr):
-#        """ Renvoie la liste des variables identifiées dans l'expression
-#            { nom : positions [], 
-#              ... }
-#        """
-#        print "getVariables", expr
-#        for n in ["not", "or", "and", "(" ,")"]:
-#            expr = expr.replace(n, " "*len(n))
-#        lst = expr.split()
-#        lst = list(set(lst))
-#        lst.sort()
-#        print "  ", lst
-#        
-#        return lst
-#    
-#    
-#        dic = {}
-#        for v in lst:
-#            dic[v] = [m.start() for m in re.finditer(v, expr)]
-#        print "  -->", dic
-#        self.var = dic
-#        return dic
-#    
-##    def setVariables(self, dicVari = None):
-##        if dicVari == None:
-##            lstVari = self.getVariables()
-##        else:
-##            lstVari = dicVari
-##        for v in lstVari:
-#            
-#            
-#            
-#            
-#    def getTableVerite(self):
-#        v = self.getVariables()
-#        return TableVerite([self])
-#    
-#    def evaluer(self, **args):
-#        print "evaluer", self.str
-#        expr = self.str
-#        for n, v in args.items():
-#            print "  ", n, v
-#            for p in self.var[n]:
-#                expr[p:p+len(n)] = str(v)
-##            
-##            expr = expr.replace(' '+n+' ', ' '+str(v)+' ')
-#        print " -->", expr
-#        return eval(expr)
-#    
-#    def toLaTex(self):
-#        return 
 
 
 #############################################################################################################
-############################################################
+#
+#    Fonction de génération de bitmap (wx) à partir d'une expression Matplotlib (LaTeX)
+#
+#############################################################################################################
 
 from matplotlib.mathtext import MathTextParser
 mathtext_parser = MathTextParser("Bitmap")
@@ -779,91 +612,82 @@ def mathtext_to_wxbitmap(s, taille = 100, color =  None):
     
     try:
         ftimage, depth = mathtext_parser.parse(s, taille)
-    except:
+    except:     # La syntaxe de l'expression n'est pas correcte
         return
 
-    if color != None:
-        if type(color) == str or type(color) == unicode :
-            color = wx.NamedColour(color)
-        
-        x = ftimage.as_array()
-        
-        # Create an RGBA array for the destination, w x h x 4
-        rgba = scipy.zeros((x.shape[0], x.shape[1], 4), dtype=scipy.uint8)
-        rgba[:,:,0:3] = color
-        rgba[:,:,3] = x
 
-       
-        bmp = wx.BitmapFromBufferRGBA(
-            ftimage.get_width(), ftimage.get_height(),
-            rgba.tostring())
-        
-    else:
-        bmp = wx.BitmapFromBufferRGBA(
-            ftimage.get_width(), ftimage.get_height(),
-            ftimage.as_rgba_str())
+    # Partie enlevée (provisoire ??) pour éviter de charger le module Scipy
+#    # Coloration de l'image
+#    if color != None:
+#        if type(color) == str or type(color) == unicode :
+#            color = wx.NamedColour(color)
+#        
+#        x = ftimage.as_array()
+#        
+#        # Create an RGBA array for the destination, w x h x 4
+#        rgba = scipy.zeros((x.shape[0], x.shape[1], 4), dtype=scipy.uint8)
+#        rgba[:,:,0:3] = color
+#        rgba[:,:,3] = x
+#       
+#        # Convertion en Bitmap
+#        bmp = wx.BitmapFromBufferRGBA(
+#            ftimage.get_width(), ftimage.get_height(),
+#            rgba.tostring())
+#        
+#    else:
+    # Convertion en Bitmap
+    bmp = wx.BitmapFromBufferRGBA(
+        ftimage.get_width(), ftimage.get_height(),
+        ftimage.as_rgba_str())
     
     return bmp
-    
-
-def tester_mathtext_to_wxbitmap(s):
-    if len(s) == 0:
-        return False
-    if s[0] <> r"$":
-        s = mathText(s)
-    try:    
-        ftimage, depth = mathtext_parser.parse(s)
-        return True
-    except:
-        print "Erreur MathText", s
-        return False
 
 
 def mathText(s):
     return r'$'+s+'$'
 
-#########################################################################################################
-#########################################################################################################
+##########################################################################################################
+##########################################################################################################
+##
+##  Table de vérité
+##
+##########################################################################################################
+########################################################################################################## 
+#class TableVerite():
+#    """ Table de vérité
+#    """
+#    def __init__(self, lstExpressions):
+#        self.lstExp = lstExpressions
+#        self.e={}
+#        self.s={}
+#        
+#    def evaluer(self):
+#        """
+#        Evaluation des sorties en fonction des entrées selon les expressions
+#        """
+#        pass
 #
-#  Table de vérité
-#
-#########################################################################################################
-######################################################################################################### 
-class TableVerite():
-    """ Table de vérité
-    """
-    def __init__(self, lstExpressions):
-        self.lstExp = lstExpressions
-        self.e={}
-        self.s={}
-        
-    def evaluer(self):
-        """
-        Evaluation des sorties en fonction des entrées selon les expressions
-        """
-        pass
-
-    def getVariables(self):
-        lst = []
-        for e in self.lstExp:
-            lst.extend(e.getVariables())
-        lst = str.split()
-        lst = list(set(lst))
-        lst.sort()
-        return lst
-            
-        
-        
-    def remplirEntrees(self):
-        v = self.getVariables()
-        self.e = [[l for l in bin(n)] for n in range(2**len(v))]
-        
-    
-    def remplirSorties(self, entrees):
-        for e in self.e:
-            for i, v in enumerate(self.getVariables()):
-                self.s[v] = self.lstExp[i].eval(e)
-        return
+#    def getVariables(self):
+#        lst = []
+#        for e in self.lstExp:
+#            lst.extend(e.getVariables())
+#        lst = str.split()
+#        lst = list(set(lst))
+#        lst.sort()
+#        return lst
+#            
+#        
+#        
+#    def remplirEntrees(self):
+#        v = self.getVariables()
+#        self.e = [[l for l in bin(n)] for n in range(2**len(v))]
+#        
+#    
+#    def remplirSorties(self, entrees):
+#        for e in self.e:
+#            for i, v in enumerate(self.getVariables()):
+#                self.s[v] = self.lstExp[i].eval(e)
+#        return
 
 
 #########################################################################################################
@@ -893,6 +717,7 @@ class LogycFrame(wx.Frame):
         #    Table de vérité
         #
         self.table = wx.ListCtrl(panel, -1, style=wx.LC_REPORT|wx.LC_HRULES|wx.LC_VRULES)
+        self.table.Bind(wx.EVT_SIZE, self.OnResize)
         
         #
         #    Le panel pour les saisies d'expression
@@ -908,14 +733,15 @@ class LogycFrame(wx.Frame):
         
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(sizerG, 1,flag = wx.EXPAND|wx.ALL, border = 2)
-        sizer.Add(self.table, flag = wx.EXPAND|wx.ALL, border = 2)
+        sizer.Add(self.table, flag = wx.GROW|wx.ALL, border = 2)
         
         panel.SetSizer(sizer)
         
         self.sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.sizer.Add(panel, 1, flag = wx.EXPAND)
+        self.sizer.Add(panel, 1 , flag = wx.EXPAND)
         self.SetSizerAndFit(self.sizer)
         
+    ########################################################################################################
     def MiseAJourTable(self, nomE, nomS, E, S):
         self.table.ClearAll()
         for i, n in enumerate(nomE):
@@ -930,18 +756,39 @@ class LogycFrame(wx.Frame):
                 self.table.SetStringItem(pos, j+1, str(e[j+1]))
             self.table.SetStringItem(pos, len(e), str(S[i]))
 
-#        self.sizer.Layout()
+        self.table.Layout()
+        self.OnResize()
         self.Fit()
+
+    ########################################################################################################
+    def OnResize(self, event=None):
+        height = 30
+        for indx in xrange(self.table.GetItemCount()):
+            height += self.table.GetItemRect(indx).height
+        self.table.SetMinSize((-1, height))
         
+        
+    ########################################################################################################
     def OnCloseMe(self, event):
+        """ Action lors de l'appui sur le bouton "Quitter"
+        """
         self.Close(True)
 
+    ########################################################################################################
     def OnCloseWindow(self, event):
+        """ Interception de l'évenement de fermeture de fenêtre
+        """
         self.Destroy()
 
-
+#########################################################################################################
+#########################################################################################################
+#
+#  Panel pour les saisies d'expression
+#
+#########################################################################################################
+#########################################################################################################
 class PanelSaisie(wx.Panel):
-    def __init__(self, parent, expr = '(not a or b) and b', nom = "S"):
+    def __init__(self, parent, expr = '(not a or b) and (b ^ c)', nom = "S"):
         wx.Panel.__init__(self, parent, -1)
         
         self.nom = nom
@@ -962,6 +809,7 @@ class PanelSaisie(wx.Panel):
         
         l2 = wx.StaticText(self, -1, nom+u" =")
         t2 = wx.TextCtrl(self, -1, u"")
+        t2.SetMinSize((200, -1))
         t2.SetToolTipString(u"Expression sous forme interprétable par python :\n" \
                             u" (ou exclusif = '^')")
         self.tp = t2
@@ -988,7 +836,7 @@ class PanelSaisie(wx.Panel):
         #
         # Initialisation
         #
-        self.expr = Expression(expr)
+        self.expr = Expression(expr, nom)
         self.tp.ChangeValue(self.expr.py_expr)
         self.ts.ChangeValue(self.expr.smp_expr)
         self.MiseAJourBmp()
@@ -999,6 +847,7 @@ class PanelSaisie(wx.Panel):
         
         
 
+    ########################################################################################################
     def EvtTextSmp(self, event):
         s = event.GetString()
         self.expr.MiseAJourSmp2Py(s)
@@ -1006,6 +855,7 @@ class PanelSaisie(wx.Panel):
         self.MiseAJourBmp()
         self.MiseAJourTable()
         
+    ########################################################################################################
     def EvtTextPy(self, event):
         s = event.GetString()
         self.expr.MiseAJourPy2Smp(s)
@@ -1013,17 +863,22 @@ class PanelSaisie(wx.Panel):
         self.MiseAJourBmp()
         self.MiseAJourTable()
         
+    ########################################################################################################
     def MiseAJourBmp(self):
         bmp = mathtext_to_wxbitmap(self.expr.math)
         if bmp == None: # L'expression n'est pas correcte !!!
             self.marquerValid(False)
         else:
             self.marquerValid(True)
-            self.bmp.SetBitmap(bmp)
+            self.bmp.SetBitmap(bmp, GetBmpHD = self.expr.GetBmpHD, GetTeX = self.expr.GetTeX)
             
         self.Layout()
         
+    ########################################################################################################
     def marquerValid(self, valid):
+        """ Gestion de la couleur de fond des TextCtrl
+            en fonction de la validité ou non de l'expression
+        """
         if valid:
             col = wx.SystemSettings_GetColour(wx.SYS_COLOUR_WINDOW)
             self.ts.SetBackgroundColour(col)
@@ -1033,6 +888,7 @@ class PanelSaisie(wx.Panel):
             self.tp.SetBackgroundColour("pink")
         self.Refresh()
         
+    ########################################################################################################
     def MiseAJourTable(self):
         E, S = self.expr.getTableVerite()
         if E == False:
@@ -1051,7 +907,11 @@ class PanelSaisie(wx.Panel):
             self.marquerValid(False)
             
         
-            
+#########################################################################################################
+#
+#  Fonctions de copie vers le presse-papier
+#
+#########################################################################################################
 def CopierTeX(TeX):
     obj = wx.TextDataObject(TeX)
     wx.TheClipboard.Open()
@@ -1075,12 +935,20 @@ def CopierBitmap(bmp):
     wx.TheClipboard.Close()    
     
     
+#########################################################################################################
+#########################################################################################################
+#
+#  Application principale
+#
+#########################################################################################################
+#########################################################################################################    
 class LogycApp(wx.App):
     def OnInit(self):
-        frame = LogycFrame(None, -1, u"Logyc")
+        frame = LogycFrame(None, -1, u"pyLogyc")
         frame.Show()
         self.SetTopWindow(frame)
         return True
+
 
 if __name__ == '__main__':
     app = LogycApp(False)
