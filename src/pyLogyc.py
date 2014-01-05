@@ -34,7 +34,7 @@ Copyright (C) 2011-2012
 """
 __appname__= "pyLogyc"
 __author__ = u"Cédrick FAURY"
-__version__ = "0.2"
+__version__ = "0.3"
 
 #
 # Import des modules nécessaires
@@ -55,6 +55,7 @@ import wx
 #########################################################################################################  
 
 FONT_SIZE_VARIABLE = 100
+FONT_SIZE = 9
 
 class Variable:
     def __init__(self, nom, val = 0, nomNorm = "", 
@@ -77,6 +78,182 @@ class Variable:
         if self.v == 1:
             self.v = 0
             
+#########################################################################################################
+#########################################################################################################
+#
+#  Expression mathématique Dec-Hex-Bin
+#
+#########################################################################################################
+#########################################################################################################  
+class ExpressionDHB():
+    def __init__(self):
+        self.dec = u""
+        self.hex = u""
+        self.bin = u""
+    
+    ########################################################################################################
+    def SetDec(self, s):
+        self.dec = s
+        self.hex = self.GetHex()
+        if self.hex == False:
+            return False
+        self.bin = self.GetBin()
+        return True
+        
+    ########################################################################################################
+    def SetBin(self, s):
+        self.bin = s
+        self.dec = self.GetDec('bin')
+        if self.dec == False:
+            return False
+        self.hex = self.GetHex()
+        
+        
+    ########################################################################################################
+    def SetHex(self, s):
+        self.hex = s
+        self.dec = self.GetDec('hex')
+        if self.dec == False:
+            return False
+        self.bin = self.GetBin()
+        
+        
+    ######################################################################################################
+    def GetDec(self, base):
+        lh = self.getConstantes(base)
+        if base == 'bin':
+            s = self.bin
+            b = 2
+        elif base == 'hex':
+            s = self.hex
+            b = 16
+        expr = ""
+        dd=0
+        for d,f in lh:
+            expr += s[dd:d]
+#            print s[d:f]
+#            print eval(s[d:f])
+            try:
+                expr += str(int(s[d:f], b))
+            except ValueError:
+                return False
+            dd = f
+        expr += s[f:]
+        return expr
+    
+    ######################################################################################################
+    def GetBin(self):
+        ld = self.getConstantes()
+#        lh = self.getConstantes('hex')
+        s = self.dec
+        expr = ""
+        dd=0
+        for d,f in ld:
+            expr += s[dd:d]
+#            print s[d:f]
+#            print eval(s[d:f])
+            try:
+                expr += bin(eval(s[d:f]))[2:]
+            except:
+                return False
+            dd = f
+        expr += s[f:]
+        return expr
+    
+    ######################################################################################################
+    def GetHex(self):
+        ld = self.getConstantes()
+        s = self.dec
+        expr = ""
+        dd=0
+        for d,f in ld:
+            expr += s[dd:d]
+#            print s[d:f]
+#            print eval(s[d:f])
+            try:
+                expr += hex(eval(s[d:f]))[2:].upper()
+            except:
+                return False
+            dd = f
+        expr += s[f:]
+        return expr
+    
+    ######################################################################################################
+    def GetEvalDec(self):
+        r = self.evaluer()
+        if r != None:
+            self.rdec = r
+            return str(r)
+        else:
+            self.rdec = None
+            return ""
+        
+    ######################################################################################################
+    def GetEvalHex(self):
+        if self.rdec == None:
+            return ""
+        return hex(self.rdec)[2:].upper()
+    
+    ######################################################################################################
+    def GetEvalBin(self):
+        if self.rdec == None:
+            return ""
+        return bin(self.rdec)[2:]
+        
+    ######################################################################################################
+    def evaluer(self):
+        """ Renvoie une valeur numérique de l'expression
+        """
+
+        dic = {}
+
+        # On fait l'évaluation
+        try:
+            v = int(eval(self.dec, {"__builtins__": None}, dic))
+        except:
+#            print "erreur", self.py_expr
+            return None
+#        print type (v)
+        
+        return v
+    
+    #########################################################################################################
+    def getConstantes(self, base = 'dec'):
+        """ Analyse de la chaine
+        """
+        print "getConstantes",
+        lh = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F']
+        if base == 'dec':
+            expr = self.dec
+            lc = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
+        elif base == 'hex':
+            expr = self.hex
+            lc = lh
+        elif base == 'bin':
+            expr = self.bin
+            lc = ['0', '1']
+        print expr
+        
+        l = []
+        d = -1
+        f = -1
+        for i, c in enumerate(expr):
+            if c.upper() in lh:
+                if d >= 0:
+                    f = i
+                else:
+                    d = i
+                    f = i
+            else:
+                if d >= 0:
+                    l.append([d, f+1])
+                d = -1
+                f = -1
+        if d >= 0:
+            l.append([d, f+1])        
+        print l
+        return l    
+        
     
 #########################################################################################################
 #########################################################################################################
@@ -698,75 +875,21 @@ def mathText(s):
 #########################################################################################################
 ######################################################################################################### 
 class LogycFrame(wx.Frame):
-    def __init__(
-            self, parent, ID, title, pos=wx.DefaultPosition,
+    def __init__(self, parent, ID, title, pos=wx.DefaultPosition,
             size=wx.DefaultSize, style=wx.DEFAULT_FRAME_STYLE
             ):
-
         wx.Frame.__init__(self, parent, ID, title, pos, size, style)
-        panel = wx.Panel(self, -1)
-
-        #
-        #    Bouton
-        #
-        button = wx.Button(panel, -1, "Quitter", size = (60, 30))
-        self.Bind(wx.EVT_BUTTON, self.OnCloseMe, button)
+        self.SetIcon(wx.Icon('pyLogyc_logo.ico'))
+        
+        self.nb = wx.Notebook(self, -1)
+        
+        self.pageTable = LogycTable(self.nb) 
+        self.nb.AddPage(self.pageTable, u"Table de vérité")
+        
+        self.pageConvers = LogycConversion(self.nb) 
+        self.nb.AddPage(self.pageConvers, u"Conversion")
+        
         self.Bind(wx.EVT_CLOSE, self.OnCloseWindow)
-        
-        #
-        #    Table de vérité
-        #
-        self.table = wx.ListCtrl(panel, -1, style=wx.LC_REPORT|wx.LC_HRULES|wx.LC_VRULES)
-        self.table.Bind(wx.EVT_SIZE, self.OnResize)
-        
-        #
-        #    Le panel pour les saisies d'expression
-        #
-        panelSaisie = PanelSaisie(panel)
-        
-        #
-        #    Mise en place des éléments
-        #
-        sizerG = wx.BoxSizer(wx.VERTICAL)
-        sizerG.Add(panelSaisie, flag = wx.EXPAND|wx.ALL, border = 2)
-        sizerG.Add(button, flag = wx.ALL, border = 2)
-        
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(sizerG, 1,flag = wx.EXPAND|wx.ALL, border = 2)
-        sizer.Add(self.table, flag = wx.GROW|wx.ALL, border = 2)
-        
-        panel.SetSizer(sizer)
-        
-        self.sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.sizer.Add(panel, 1 , flag = wx.EXPAND)
-        self.SetSizerAndFit(self.sizer)
-        
-    ########################################################################################################
-    def MiseAJourTable(self, nomE, nomS, E, S):
-        self.table.ClearAll()
-        for i, n in enumerate(nomE):
-            self.table.InsertColumn(i, n)
-            self.table.SetColumnWidth(i, wx.LIST_AUTOSIZE)
-        self.table.InsertColumn(len(nomE), nomS)
-        self.table.SetColumnWidth(len(nomE), wx.LIST_AUTOSIZE)
-        
-        for i, e in enumerate(E):
-            pos = self.table.InsertStringItem(i, str(e[0]))
-            for j in range(len(e)-1):
-                self.table.SetStringItem(pos, j+1, str(e[j+1]))
-            self.table.SetStringItem(pos, len(e), str(S[i]))
-
-        self.table.Layout()
-        self.OnResize()
-        self.Fit()
-
-    ########################################################################################################
-    def OnResize(self, event=None):
-        height = 30
-        for indx in xrange(self.table.GetItemCount()):
-            height += self.table.GetItemRect(indx).height
-        self.table.SetMinSize((-1, height))
-        
         
     ########################################################################################################
     def OnCloseMe(self, event):
@@ -779,7 +902,230 @@ class LogycFrame(wx.Frame):
         """ Interception de l'évenement de fermeture de fenêtre
         """
         self.Destroy()
+ 
+ 
+#########################################################################################################
+#########################################################################################################
+#
+#  Fenêtre table de vérité
+#
+#########################################################################################################
+#########################################################################################################    
+class LogycTable(wx.Panel):
+    def __init__(self, parent):
 
+        wx.Panel.__init__(self, parent, -1)
+                 
+        #
+        #    Bouton
+        #
+#        button = wx.Button(self, -1, "Quitter", size = (60, 30))
+#        self.Bind(wx.EVT_BUTTON, self.OnCloseMe, button)
+        
+        #
+        #    Table de vérité
+        #
+        self.table = wx.ListCtrl(self, -1, style=wx.LC_REPORT|wx.LC_HRULES|wx.LC_VRULES)
+        self.table.Bind(wx.EVT_SIZE, self.OnResize)
+        
+        #
+        #    Le panel pour les saisies d'expression
+        #
+        panelSaisie = PanelSaisie(self)
+        
+        #
+        #    Mise en place des éléments
+        #
+        sizerG = wx.BoxSizer(wx.VERTICAL)
+        sizerG.Add(panelSaisie, flag = wx.EXPAND|wx.ALL, border = 2)
+#        sizerG.Add(button, flag = wx.ALL, border = 2)
+        
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer.Add(sizerG, 1,flag = wx.EXPAND|wx.ALL, border = 2)
+        sizer.Add(self.table, flag = wx.GROW|wx.ALL, border = 2)
+        
+        self.SetSizerAndFit(sizer)
+        
+#        self.sizer = wx.BoxSizer(wx.HORIZONTAL)
+#        self.sizer.Add(panel, 1 , flag = wx.EXPAND)
+#        self.SetSizerAndFit(self.sizer)
+        
+    ########################################################################################################
+    def MiseAJourTable(self, nomE, nomS, E, S):
+        self.table.ClearAll()
+        font = wx.Font(FONT_SIZE, wx.FONTFAMILY_DEFAULT , wx.NORMAL, wx.NORMAL)
+        self.table.SetFont(font)
+        
+        for i, n in enumerate(nomE):
+            self.table.InsertColumn(i, n)
+            self.table.SetColumnWidth(i, wx.LIST_AUTOSIZE)
+        self.table.InsertColumn(len(nomE), nomS)
+        self.table.SetColumnWidth(len(nomE), wx.LIST_AUTOSIZE)
+        
+#        font = wx.Font(FONT_SIZE, wx.FONTFAMILY_DEFAULT , wx.NORMAL, wx.BOLD)
+        for i, e in enumerate(E):
+            pos = self.table.InsertStringItem(i, str(e[0]))
+            for j in range(len(e)-1):
+                self.table.SetStringItem(pos, j+1, str(e[j+1]))
+            self.table.SetStringItem(pos, len(e), str(S[i]))
+            
+#            self.table.SetItemFont(pos, font)
+        
+        
+        self.table.Layout()
+        self.OnResize()
+        self.Fit()
+
+    ########################################################################################################
+    def OnResize(self, event=None):
+        height = int(2*FONT_SIZE)
+        for indx in xrange(self.table.GetItemCount()):
+            height += self.table.GetItemRect(indx).height
+        self.table.SetMinSize((-1, height))
+        
+        
+
+#########################################################################################################
+#########################################################################################################
+#
+#  Fenêtre conversion
+#
+#########################################################################################################
+#########################################################################################################    
+class LogycConversion(wx.Panel):
+    def __init__(self, parent):
+
+        wx.Panel.__init__(self, parent, -1)
+                 
+        font = wx.Font(FONT_SIZE, wx.FONTFAMILY_DEFAULT , wx.NORMAL, wx.NORMAL)
+        
+        #
+        #    Zones de saisie d'expressions
+        #
+        l1 = wx.StaticText(self, -1, u"dec")
+        l1.SetFont(font)
+        t1 = wx.TextCtrl(self, -1, u"")
+        t1.SetFont(font)
+        t1.SetToolTipString(u"Expression sous forme décimale")
+        self.dec = t1
+        self.Bind(wx.EVT_TEXT, self.EvtTextDec, t1)
+        r1 = wx.TextCtrl(self, -1, u"", style = wx.TE_READONLY)
+        r1.SetFont(font)
+        r1.SetToolTipString(u"Résultat sous forme décimale")
+        self.rdec = r1
+        
+        l2 = wx.StaticText(self, -1, u"hex")
+        l2.SetFont(font)
+        t2 = wx.TextCtrl(self, -1, u"")
+        t2.SetFont(font)
+        t2.SetMinSize((200, -1))
+        t2.SetToolTipString(u"Expression sous forme héxadécimale")
+        self.hex = t2
+        self.Bind(wx.EVT_TEXT, self.EvtTextHex, t2)
+        r2 = wx.TextCtrl(self, -1, u"", style = wx.TE_READONLY)
+        r2.SetFont(font)
+        r2.SetToolTipString(u"Résultat sous forme héxadécimale")
+        self.rhex = r2
+        
+        l3 = wx.StaticText(self, -1, u"bin")
+        l3.SetFont(font)
+        t3 = wx.TextCtrl(self, -1, u"")
+        t3.SetFont(font)
+        t3.SetMinSize((200, -1))
+        t3.SetToolTipString(u"Expression sous forme binaire")
+        self.bin = t3
+        self.Bind(wx.EVT_TEXT, self.EvtTextBin, t3)
+        r3 = wx.TextCtrl(self, -1, u"", style = wx.TE_READONLY)
+        r3.SetFont(font)
+        r3.SetToolTipString(u"Résultat sous forme binaire")
+        self.rbin = r3
+        
+        #
+        #    Mise en place des éléments
+        #
+        sizer = wx.GridBagSizer()
+        sizer.Add(l1, (0,0), flag = wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT)
+        sizer.Add(t1, (0,1), flag = wx.EXPAND|wx.ALL, border = 2)
+        sizer.Add(r1, (0,2), flag = wx.EXPAND|wx.ALL, border = 2)
+        sizer.Add(l2, (1,0), flag = wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT)
+        sizer.Add(t2, (1,1), flag = wx.EXPAND|wx.ALL|wx.ALIGN_CENTER, border = 2)
+        sizer.Add(r2, (1,2), flag = wx.EXPAND|wx.ALL, border = 2)
+        sizer.Add(l3, (2,0), flag = wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT)
+        sizer.Add(t3, (2,1), flag = wx.EXPAND|wx.ALL|wx.ALIGN_CENTER, border = 2)
+        sizer.Add(r3, (2,2), flag = wx.EXPAND|wx.ALL, border = 2)
+        
+        sizer.AddGrowableCol(1)
+#        sizer.AddGrowableRow(2)
+        
+        self.SetSizerAndFit(sizer)
+        self.Refresh()
+        
+        #
+        # Initialisation
+        #
+        self.expr = ExpressionDHB()
+        
+        
+    ########################################################################################################
+    def MiseAJour(self):
+        self.dec.ChangeValue(self.expr.dec)
+        self.hex.ChangeValue(self.expr.hex)
+        self.bin.ChangeValue(self.expr.bin)
+        self.rdec.ChangeValue(self.expr.GetEvalDec())
+        self.rhex.ChangeValue(self.expr.GetEvalHex())
+        self.rbin.ChangeValue(self.expr.GetEvalBin())
+        
+    ########################################################################################################
+    def Verifier(self, base, v = True):
+        if self.expr.rdec == None or v == False:
+            self.marquerValid(base, False)
+        else:
+            self.marquerValid(base, True)
+    
+    ########################################################################################################
+    def EvtTextDec(self, event):
+        s = event.GetString()
+        v = self.expr.SetDec(s)
+        if v:
+            self.MiseAJour()
+        self.Verifier('dec', v)
+        
+    ########################################################################################################
+    def EvtTextHex(self, event):
+        s = event.GetString()
+        self.expr.SetHex(s)
+        self.MiseAJour()
+        self.Verifier('hex')
+        
+    ########################################################################################################
+    def EvtTextBin(self, event):
+        s = event.GetString()
+        v = self.expr.SetBin(s)
+        if v:
+            self.MiseAJour()
+        self.Verifier('bin', v)
+
+    ########################################################################################################
+    def marquerValid(self, base, valid):
+        """ Gestion de la couleur de fond des TextCtrl
+            en fonction de la validité ou non de l'expression
+        """
+        if valid:
+            col = wx.SystemSettings_GetColour(wx.SYS_COLOUR_WINDOW)
+        else:
+            col = "pink"
+        
+        if base == 'dec':
+            self.dec.SetBackgroundColour(col)
+        elif base == 'hex':
+            self.hex.SetBackgroundColour(col)
+        else:
+            self.bin.SetBackgroundColour(col)
+        
+        self.Refresh()
+        
+        
+        
 #########################################################################################################
 #########################################################################################################
 #
@@ -792,13 +1138,16 @@ class PanelSaisie(wx.Panel):
         wx.Panel.__init__(self, parent, -1)
         
         self.nom = nom
-        self.parent = parent.Parent
+        self.parent = parent
+        font = wx.Font(FONT_SIZE, wx.FONTFAMILY_DEFAULT , wx.NORMAL, wx.NORMAL)
         
         #
         #    Zones de saisie d'expressions
         #
         l1 = wx.StaticText(self, -1, nom+u" =")
+        l1.SetFont(font)
         t1 = wx.TextCtrl(self, -1, u"")
+        t1.SetFont(font)
         t1.SetToolTipString(u"Expression sous forme simple :\n" \
                             u"  not a   --> /a\n" \
                             u"  a and b --> a.b\n"\
@@ -808,7 +1157,9 @@ class PanelSaisie(wx.Panel):
         self.Bind(wx.EVT_TEXT, self.EvtTextSmp, t1)
         
         l2 = wx.StaticText(self, -1, nom+u" =")
+        l2.SetFont(font)
         t2 = wx.TextCtrl(self, -1, u"")
+        t2.SetFont(font)
         t2.SetMinSize((200, -1))
         t2.SetToolTipString(u"Expression sous forme interprétable par python :\n" \
                             u" (ou exclusif = '^')")

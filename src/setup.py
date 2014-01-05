@@ -9,6 +9,10 @@ import matplotlib
 import shutil
 shutil.rmtree("build", ignore_errors=True)
 
+#if 'bdist_msi' in sys.argv:
+#    sys.argv += ['--install-script', 'install.py']
+
+
 # Inculsion des fichiers de données
 #################################################################################################
 includefiles = [( matplotlib.get_data_path(),"mpl-data")]
@@ -41,7 +45,7 @@ cible = Executable(
     script = "pyLogyc.py",
     base = base,
     compress = True,
-    icon = None,
+    icon = 'pyLogyc_logo.ico',
     initScript = None,
     copyDependentFiles = True,
     appendScriptToExe = False,
@@ -54,6 +58,7 @@ setup(  name = "pyLogyc",
         author = "Cedrick FAURY",
         description = "Evaluation d'expressions logiques",
         options = {"build_exe": build_exe_options},
+#        include-msvcr = True,
         executables = [cible])
 
 
