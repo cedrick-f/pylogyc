@@ -603,6 +603,11 @@ class ExpressionDHB():
         if self.rdec == None:
             return ""
         
+        l = self.GetLongMax()
+        if l > self.long:
+            self.long = l
+            self.MiseAJourCtrlLong()
+            
         if self.rdec < 0:
             n = self.GetNeg()
         else:
