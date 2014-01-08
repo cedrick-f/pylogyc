@@ -43,8 +43,79 @@ __version__ = "0.3"
 # GUI
 import wx
 
+from math import ceil
 # Calcul scientifique
 #import scipy
+
+#########################################################################################################
+#########################################################################################################
+#
+#  Variable
+#
+#########################################################################################################
+#########################################################################################################  
+class Variable:
+    def __init__(self, nom, val = 0, nomNorm = "", 
+                 bornes = [None,None], modeLog = True,
+                 expression = None, multiple = False):
+        self.n = nom
+        self.nn = nomNorm
+        self.v = val
+  
+        self.bornes = bornes
+        self.modeLog = modeLog
+        self.multiple = multiple
+        
+        # Si la variable fait partie d'une expression
+        self.expression = expression
+        
+    def __repr__(self):
+        return self.n+" = "+str(self.v)+"("+str(self.t)+")"
+    
+    def Augmenter(self, coef = 1):
+        if self.EstValide(self.v + coef):
+            self.v += coef
+
+       
+            
+    def Diminuer(self, coef = 1):
+        if self.EstValide(self.v - coef):
+            self.v += -coef
+       
+
+    def ChangerSigne(self):
+        self.v = -self.v
+            
+    def EstValideStr(self, val):
+#        print "validStr?",val, type(val), eval(val)
+        
+        try:
+            if len(val) > 1:
+                val = val.lstrip('0')
+            v = eval(val)
+            return self.EstValide(v), v
+        except NameError:
+            return False, None
+        except SyntaxError:
+            return False, None
+        except:
+            return False, None    
+        
+    #########################################################################################################
+    def EstValide(self, val):
+#        print "valid?",val, type(val), self.t
+        v = val
+        
+        if type(v) == int:
+            return self.EstDansBornes(v)
+
+        
+        return False
+    
+    #########################################################################################################
+    def EstDansBornes(self, v):
+        return      (self.bornes[0] == None or v >= self.bornes[0]) \
+                and (self.bornes[1] == None or v <= self.bornes[1])
 
 #########################################################################################################
 #########################################################################################################
@@ -54,21 +125,26 @@ import wx
 #########################################################################################################
 #########################################################################################################  
 
-FONT_SIZE_VARIABLE = 100
-FONT_SIZE = 9
 
-class Variable:
+FONT_SIZE = 16
+FONT_EQ_HD = 300
+FONT_EQ = int(100/9*16)
+
+
+class VariableBin:
     def __init__(self, nom, val = 0, nomNorm = "", 
-                 expression = None):
+                 expression = None, bornes = [None,None]):
         self.n = nom
         self.nn = nomNorm
         self.v = val
+        self.bornes = bornes
         
         # Si la variable fait partie d'une expression
         self.expression = expression
         
     def __repr__(self):
         return self.n+" = "+str(self.v)
+    
     
     def Augmenter(self):
         if self.v == 0:
@@ -78,6 +154,253 @@ class Variable:
         if self.v == 1:
             self.v = 0
             
+
+
+
+myEVT_VAR_CTRL = wx.NewEventType()
+EVT_VAR_CTRL = wx.PyEventBinder(myEVT_VAR_CTRL, 1)
+
+#----------------------------------------------------------------------
+
+class VarEvent(wx.PyCommandEvent):
+    def __init__(self, evtType, id):
+        wx.PyCommandEvent.__init__(self, evtType, id)
+        self.var = None
+
+    def SetVar(self, var):
+        self.var = var
+
+    def GetVar(self):
+        return self.var
+    
+    
+class VariableCtrl(wx.Panel):
+    def __init__(self, parent, variable, signeEgal = True, 
+                 slider = False, fct = None, help = "", sizeh = -1):
+        wx.Panel.__init__(self, parent, -1)
+        
+#        if coef == None:
+#            self.coef = 1
+#        else:
+#            self.coef = coef
+        
+        # Une fonction d'activation/désactivation du zoomauto à l'utilisation du slider
+        self.fct = fct
+        self.etatInit = None
+        
+        
+        #
+        # Nom de la variable (titre)
+        #
+        self.variable = variable
+        txt = self.variable.n
+        if signeEgal:
+            txt += " ="
+        txtnom = wx.StaticText(self, -1, txt)
+            
+        if len(help) > 0:
+            txtnom.SetToolTipString(help)
+            
+        #
+        # Valeur de la variable
+        #
+        self.text = wx.TextCtrl(self, -1, self.lstToText(self.variable.v), size = (sizeh, -1))#,
+        if self.variable.nn == "":
+            txtn = u"de la variable "+self.variable.n
+        else:
+            txtn = self.variable.nn
+        self.text.SetToolTipString(u"Saisir la valeur "+txtn)
+        
+        self.Bind(wx.EVT_TEXT, self.OnChar, self.text)
+#        self.Bind(wx.EVT_CHAR, self.OnChar, self.text)
+        
+        # Contrôle de la variable
+        self.spin = wx.SpinButton(self, -1, size = (15,25), style = wx.SP_VERTICAL | wx.SP_ARROW_KEYS)
+        
+        self.spin.SetRange(-100, 100)
+        self.spin.SetValue(0)
+        self.spin.SetToolTipString(u"Agir ici pour augmenter/diminuer la valeur "+txtn)
+
+        self.Bind(wx.EVT_SPIN_UP, self.OnSpinUp, self.spin)
+        self.Bind(wx.EVT_SPIN_DOWN, self.OnSpinDown, self.spin)
+        
+        vs = wx.BoxSizer( wx.HORIZONTAL)
+        vs.Add( txtnom, 0, wx.ALIGN_CENTRE_VERTICAL|wx.ALIGN_RIGHT|wx.LEFT, 4 )
+        vs.Add(self.text, 1, wx.ALIGN_CENTRE|wx.LEFT|wx.RIGHT, 5 )
+        vs.Add(self.spin, 0, wx.ALIGN_CENTRE|wx.LEFT|wx.RIGHT, 5 )
+        
+        sizer = wx.BoxSizer( wx.VERTICAL)
+        sizer.Add(vs)
+        
+        if slider:
+            self.sli = wx.Slider(self, -1, 0, -100, 100, 
+                                 size = (self.text.GetSize()[0] + self.spin.GetSize()[0] + 20, 20),
+                                 style = wx.SL_TOP)
+            self.sli.SetToolTipString(u"Agir ici pour augmenter/diminuer la valeur "+txtn)
+
+#            self.Bind(wx.EVT_LEAVE_WINDOW, self.OnLeave)
+            self.Bind(wx.EVT_SCROLL_CHANGED, self.OnScroll, self.sli)
+            self.Bind(wx.EVT_SCROLL_THUMBTRACK, self.OnScroll, self.sli)
+            self.Bind(wx.EVT_SCROLL_THUMBRELEASE, self.OnScrollRelease, self.sli)
+            sizer.Add(self.sli, flag = wx.ALIGN_RIGHT|wx.BOTTOM, border = 4)
+            self.lastPos = 0
+        
+        self.SetSizerAndFit(sizer)
+    
+    
+    #########################################################################################################
+    def sendEvent(self):
+        # Pour contourner un bug de scipy ...
+        self.variable.v = self.variable.v
+#        print "Variable :",self.variable.n, self.variable.v[0]
+        evt = VarEvent(myEVT_VAR_CTRL, self.GetId())
+        evt.SetVar(self.variable)
+        self.GetEventHandler().ProcessEvent(evt)
+    
+    
+#    #########################################################################################################
+#    def OnLeave( self, event ):    
+#        print "Leave"
+#        self.Parent.SetFocus()
+        
+    #########################################################################################################
+    def OnScroll( self, event ):
+#        if self.release: 
+#            self.release = False
+#            return
+#        
+#        print "OnScroll", event.GetPosition()
+        
+        pos = event.GetPosition()
+        if pos != self.lastPos:
+            
+            # Quand on commence le Scroll, on "désactive"
+            if self.etatInit == None:
+                self.etatInit = self.fct() # Etat d'activation initial
+                self.fct(False) # Désactivation
+            
+            # Effet du Scroll ...
+            coef = 10.0 **((pos-self.lastPos) / 100.0)
+            self.variable.Augmenter(coef)
+        
+            self.mofifierValeurs()
+            self.lastPos = pos
+        
+            # On remet dans l'état d'activation initial (avant Scroll)
+            self.fct(self.etatInit) # Etat d'activation initial
+            self.etatInit = None
+        
+        
+    #########################################################################################################
+    def OnScrollRelease( self, event ):
+#        print "ScrollRelease"
+        # On remet le slider au milieu
+#        self.release = True
+        self.sli.SetValue(0)
+        self.lastPos = 0
+        
+#        # On remet dans l'état d'activation initial (avant Scroll)
+#        self.fct(self.etatInit) # Etat d'activation initial
+#        self.etatInit = None
+        
+        
+        
+        
+    #########################################################################################################
+    def OnSpinUp( self, event ):
+#        print "SpinUp", self.coef
+        self.variable.Augmenter()
+        self.mofifierValeurs()
+        
+        
+    #########################################################################################################
+    def OnSpinDown( self, event ):
+#        print "SpinDown", self.coef
+        self.variable.Diminuer()
+        self.mofifierValeurs()
+       
+        
+    #########################################################################################################
+    def mofifierValeurs(self):
+        self.text.ChangeValue(self.lstToText(self.variable.v))
+        
+        # On teste si la variable permet une valeur d'expression valide
+        valid = True
+        if self.variable.expression != None:
+            try:
+                e = self.variable.expression.evaluer()
+            except:
+                valid = False
+            if e == None:
+                valid = False
+        if valid:
+            self.sendEvent()
+            self.marquerValid(True)
+        else:
+            self.marquerValid(False)
+        
+    
+    #########################################################################################################
+    def mofifierValeursSsEvt(self):
+        self.text.ChangeValue(self.lstToText(self.variable.v))
+
+
+    #########################################################################################################
+    def lstToText(self, v):
+        return str(v)
+        
+        
+        
+    #########################################################################################################
+    def getLstValeurs(self, text):
+        valid = True
+        lst = text.split()
+        lstValeurs = []
+        for t in lst:
+            try:
+                v = eval(t)
+            except:
+                v = t
+                
+            if type(v) == int or type(v) == float:
+                lstValeurs.append(v)
+            else:
+                valid = False
+                continue
+            
+        return valid, lstValeurs
+
+
+    #########################################################################################################
+    def OnChar(self, event):
+        val = event.GetString()
+        v = eval(val)
+        valid = self.variable.EstValide(v)
+            
+        if not valid :
+            self.marquerValid(False)
+        else:
+            self.variable.v = v
+            self.marquerValid(True)
+            self.sendEvent()
+        event.Skip()
+        
+        return
+    
+    
+    
+    def marquerValid(self, etat):
+        if etat:
+            self.text.SetBackgroundColour(
+                 wx.SystemSettings_GetColour(wx.SYS_COLOUR_WINDOW))
+            
+        else:
+            self.text.SetBackgroundColour("pink")
+            self.text.SetFocus()
+        
+        self.Refresh()
+        
+        
 #########################################################################################################
 #########################################################################################################
 #
@@ -86,11 +409,31 @@ class Variable:
 #########################################################################################################
 #########################################################################################################  
 class ExpressionDHB():
-    def __init__(self):
+    def __init__(self, parent):
+        self.parent = parent
+        
         self.dec = u""
         self.hex = u""
         self.bin = u""
+        
+        self.typeNeg = 2
+        self.long = 8
+        self.longAuto = True
     
+    
+    ########################################################################################################
+    def SetLongAuto(self, a):
+        self.longAuto = a
+#        self.SetDec(self.dec)
+        
+    ########################################################################################################
+    def SetLong(self, l):
+        self.long = l
+        
+    ########################################################################################################
+    def SetTypeNeg(self, t):
+        self.typeNeg = t
+        
     ########################################################################################################
     def SetDec(self, s):
         self.dec = s
@@ -147,7 +490,8 @@ class ExpressionDHB():
 #        lh = self.getConstantes('hex')
         s = self.dec
         expr = ""
-        dd=0
+        dd = 0
+        f = 0
         for d,f in ld:
             expr += s[dd:d]
 #            print s[d:f]
@@ -165,7 +509,8 @@ class ExpressionDHB():
         ld = self.getConstantes()
         s = self.dec
         expr = ""
-        dd=0
+        dd = 0
+        f = 0
         for d,f in ld:
             expr += s[dd:d]
 #            print s[d:f]
@@ -178,6 +523,71 @@ class ExpressionDHB():
         expr += s[f:]
         return expr
     
+    
+    ######################################################################################################
+    def GetLongMax(self):
+        l = 0
+        s = self.dec
+        for d,f in self.getConstantes():
+            try:
+                l = max(l, len(bin(eval(s[d:f]))[2:]))
+            except:
+                return False
+        return l
+        
+        
+    ######################################################################################################
+    def GetNeg(self):
+        """ Renvoie la valeur "négative" du nombre
+        """
+        
+        if self.typeNeg == 0: # Bit de signe
+            l = self.GetLongMax()
+            if l >= self.long:
+                self.long = l+1
+                self.MiseAJourCtrlLong()
+            f = "{0:0"+str(self.long)+"b}"
+            return int("1"+f.format(abs(self.rdec))[1:], 2)
+        
+        elif self.typeNeg == 1: # Complément à 1
+            t = int("1"*self.long, 2)
+            return t^abs(self.rdec)
+        
+        elif self.typeNeg == 2: # Complément à 2
+            t = int("1"*self.long, 2)
+            n = (t^abs(self.rdec)) + 1
+            return (t^abs(self.rdec)) + 1
+        
+        
+        
+    ######################################################################################################
+    def GetNegBin(self):
+        f = "{0:0"+str(self.long)+"b}"
+        if self.typeNeg == 0: # Bit de signe
+            return "1"+f.format(self.rdec)
+        
+        elif self.typeNeg == 1: # Complément à 1
+            
+            s = f.format(self.rdec)
+
+            t = int("1"*self.long, 2)
+            
+            return f.format(t^abs(self.rdec))
+#            return "".join(str(1 & int(n) >> i) for i in range(64)[::-1])
+#            return "".join(str(1-eval(c)) for c in s)
+        
+        elif self.typeNeg == 2: # Complément à 2
+            t = int("1"*self.long, 2)
+            n = (t^abs(self.rdec)) + 1
+#            s = f.format(self.rdec)
+#            n = int("".join([str(1-eval(c)) for c in s]), 2) +1
+            return f.format(n)
+        
+    
+    ######################################################################################################
+    def GetNegHex(self):
+        return hex(int(self.GetNeg(), 2))[2:].upper()
+        
     ######################################################################################################
     def GetEvalDec(self):
         r = self.evaluer()
@@ -192,21 +602,50 @@ class ExpressionDHB():
     def GetEvalHex(self):
         if self.rdec == None:
             return ""
-        return hex(self.rdec)[2:].upper()
+        
+        if self.rdec < 0:
+            n = self.GetNeg()
+        else:
+            n = self.rdec
+        
+        return hex(n)[2:].upper()
     
     ######################################################################################################
-    def GetEvalBin(self):
+    def GetEvalBin(self, frmt = 0):
         if self.rdec == None:
             return ""
-        return bin(self.rdec)[2:]
+        
+        l = self.GetLongMax()
+        if l > self.long:
+            self.long = l
+            self.MiseAJourCtrlLong()
+            
+        if self.rdec < 0:
+            n = self.GetNeg()
+        else:
+            n = self.rdec
+        
+        if frmt == 0: # Format Brut
+            return "{0:b}".format(n)
+        
+        elif frmt == 1: # Nombre de bit fixe
+            f = "{0:0"+str(self.long)+"b}"
+            return f.format(n)
+        
+        elif frmt == 2: # Nombre de bit fixe + écart 4x4
+            f = "{0:0"+str(self.long)+"b}"
+            t = f.format(n).zfill(int(4*ceil(float(self.long)/4)))
+            return " ".join(t[i*4:(i+1)*4] for i in range(self.long/4+1))
+        
+    ######################################################################################################
+    def MiseAJourCtrlLong(self):
+        self.parent.MiseAJourCtrlLong(self.long)
         
     ######################################################################################################
     def evaluer(self):
         """ Renvoie une valeur numérique de l'expression
         """
-
         dic = {}
-
         # On fait l'évaluation
         try:
             v = int(eval(self.dec, {"__builtins__": None}, dic))
@@ -214,14 +653,13 @@ class ExpressionDHB():
 #            print "erreur", self.py_expr
             return None
 #        print type (v)
-        
         return v
+    
     
     #########################################################################################################
     def getConstantes(self, base = 'dec'):
         """ Analyse de la chaine
         """
-        print "getConstantes",
         lh = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F']
         if base == 'dec':
             expr = self.dec
@@ -232,7 +670,6 @@ class ExpressionDHB():
         elif base == 'bin':
             expr = self.bin
             lc = ['0', '1']
-        print expr
         
         l = []
         d = -1
@@ -251,7 +688,7 @@ class ExpressionDHB():
                 f = -1
         if d >= 0:
             l.append([d, f+1])        
-        print l
+
         return l    
         
     
@@ -302,7 +739,7 @@ class Expression():
                 nn = r""+"\\"+n
             else:
                 nn = n
-            self.vari[n] = Variable(nn, val = v, expression = self)
+            self.vari[n] = VariableBin(nn, val = v, expression = self)
 
         # Une expression "simple"
         self.MiseAJourPy2Smp(self.py_expr)
@@ -529,7 +966,7 @@ class Expression():
     def GetBmpHD(self):
         """ Renvoie une image (wx) en "haute définition"
         """
-        return mathtext_to_wxbitmap(self.math, 300)
+        return mathtext_to_wxbitmap(self.math, FONT_EQ_HD)
 
     #########################################################################################################
     def GetTeX(self):
@@ -673,14 +1110,12 @@ class ScrolledBitmap(wx.ScrolledWindow):
     
     ######################################################################################################    
     def OnMouseUp(self, event):
+        return
         x0, y0 = self.GetViewStart()
         x, y = event.GetX(), event.GetY()
         mouseInfo = (x,y, x0, y0)
         if self.mouseInfo == None or self.mouseInfo[0] == mouseInfo[0]:
             self.AugmenterNum()
-            for sb in self.synchroAvec:
-                if sb != self:
-                    sb.AugmenterNum(sendEvent = False)
         self.mouseInfo = None
         
     
@@ -752,6 +1187,7 @@ class ScrolledBitmap(wx.ScrolledWindow):
             w, h = 1,1
         else:
             w, h = bmp.GetWidth(), bmp.GetHeight()
+        print w,h
         self.SetVirtualSize((w, h))
 #        self.SetVirtualSizeHints(w, h, w, h)
         
@@ -880,30 +1316,46 @@ class LogycFrame(wx.Frame):
             ):
         wx.Frame.__init__(self, parent, ID, title, pos, size, style)
         self.SetIcon(wx.Icon('pyLogyc_logo.ico'))
+        self.SetFont()
+        
+        self.Freeze()
         
         self.nb = wx.Notebook(self, -1)
         
         self.pageTable = LogycTable(self.nb) 
-        self.nb.AddPage(self.pageTable, u"Table de vérité")
         
-        self.pageConvers = LogycConversion(self.nb) 
+        self.pageConvers = LogycConversion(self.nb)
+        self.nb.AddPage(self.pageTable, u"Table de vérité")
         self.nb.AddPage(self.pageConvers, u"Conversion")
         
+        self.sizer = wx.BoxSizer()
+        self.sizer.Add(self.nb, 1, flag = wx.EXPAND)
+        self.SetSizerAndFit(self.sizer)
+        
+        self.Layout()
+        self.Thaw()
+        self.Refresh()
+        
+#        self.Bind(wx.EVT_SIZE, self.OnReSize)
         self.Bind(wx.EVT_CLOSE, self.OnCloseWindow)
         
+    
     ########################################################################################################
-    def OnCloseMe(self, event):
-        """ Action lors de l'appui sur le bouton "Quitter"
-        """
-        self.Close(True)
-
+    def OnReSize(self, event):
+        self.sizer.FitInside(self)
+#        self.Fit()
+        
+        
     ########################################################################################################
     def OnCloseWindow(self, event):
         """ Interception de l'évenement de fermeture de fenêtre
         """
         self.Destroy()
  
- 
+    ########################################################################################################
+    def SetFont(self):
+        self.font = wx.Font(FONT_SIZE, wx.FONTFAMILY_DEFAULT , wx.NORMAL, wx.NORMAL)
+        
 #########################################################################################################
 #########################################################################################################
 #
@@ -915,12 +1367,6 @@ class LogycTable(wx.Panel):
     def __init__(self, parent):
 
         wx.Panel.__init__(self, parent, -1)
-                 
-        #
-        #    Bouton
-        #
-#        button = wx.Button(self, -1, "Quitter", size = (60, 30))
-#        self.Bind(wx.EVT_BUTTON, self.OnCloseMe, button)
         
         #
         #    Table de vérité
@@ -945,16 +1391,22 @@ class LogycTable(wx.Panel):
         sizer.Add(self.table, flag = wx.GROW|wx.ALL, border = 2)
         
         self.SetSizerAndFit(sizer)
+        self.Layout()
+        self.Refresh()
         
 #        self.sizer = wx.BoxSizer(wx.HORIZONTAL)
 #        self.sizer.Add(panel, 1 , flag = wx.EXPAND)
 #        self.SetSizerAndFit(self.sizer)
         
     ########################################################################################################
+    def GetFont(self):
+        return self.Parent.Parent.font
+    
+    ########################################################################################################
     def MiseAJourTable(self, nomE, nomS, E, S):
         self.table.ClearAll()
-        font = wx.Font(FONT_SIZE, wx.FONTFAMILY_DEFAULT , wx.NORMAL, wx.NORMAL)
-        self.table.SetFont(font)
+        
+        self.table.SetFont(self.GetFont())
         
         for i, n in enumerate(nomE):
             self.table.InsertColumn(i, n)
@@ -997,48 +1449,92 @@ class LogycConversion(wx.Panel):
 
         wx.Panel.__init__(self, parent, -1)
                  
-        font = wx.Font(FONT_SIZE, wx.FONTFAMILY_DEFAULT , wx.NORMAL, wx.NORMAL)
         
         #
         #    Zones de saisie d'expressions
         #
         l1 = wx.StaticText(self, -1, u"dec")
-        l1.SetFont(font)
+        l1.SetFont(self.GetFont())
         t1 = wx.TextCtrl(self, -1, u"")
-        t1.SetFont(font)
+        t1.SetFont(self.GetFont())
         t1.SetToolTipString(u"Expression sous forme décimale")
         self.dec = t1
         self.Bind(wx.EVT_TEXT, self.EvtTextDec, t1)
         r1 = wx.TextCtrl(self, -1, u"", style = wx.TE_READONLY)
-        r1.SetFont(font)
+        r1.SetFont(self.GetFont())
         r1.SetToolTipString(u"Résultat sous forme décimale")
         self.rdec = r1
         
         l2 = wx.StaticText(self, -1, u"hex")
-        l2.SetFont(font)
+        l2.SetFont(self.GetFont())
         t2 = wx.TextCtrl(self, -1, u"")
-        t2.SetFont(font)
+        t2.SetFont(self.GetFont())
         t2.SetMinSize((200, -1))
         t2.SetToolTipString(u"Expression sous forme héxadécimale")
         self.hex = t2
         self.Bind(wx.EVT_TEXT, self.EvtTextHex, t2)
         r2 = wx.TextCtrl(self, -1, u"", style = wx.TE_READONLY)
-        r2.SetFont(font)
+        r2.SetFont(self.GetFont())
         r2.SetToolTipString(u"Résultat sous forme héxadécimale")
         self.rhex = r2
         
         l3 = wx.StaticText(self, -1, u"bin")
-        l3.SetFont(font)
+        l3.SetFont(self.GetFont())
         t3 = wx.TextCtrl(self, -1, u"")
-        t3.SetFont(font)
+        t3.SetFont(self.GetFont())
         t3.SetMinSize((200, -1))
         t3.SetToolTipString(u"Expression sous forme binaire")
         self.bin = t3
         self.Bind(wx.EVT_TEXT, self.EvtTextBin, t3)
         r3 = wx.TextCtrl(self, -1, u"", style = wx.TE_READONLY)
-        r3.SetFont(font)
+        r3.SetFont(self.GetFont())
         r3.SetToolTipString(u"Résultat sous forme binaire")
         self.rbin = r3
+        
+        
+        
+        sb = wx.StaticBox(self, -1, u"Représentation des nombres négatifs")
+        sbs = wx.StaticBoxSizer(sb, wx.VERTICAL)
+        
+        rb = wx.RadioBox(
+                         self, -1, u"Code", wx.DefaultPosition, wx.DefaultSize,
+                         [u"Bit de signe",
+                          u"Complément à 1",
+                          u"Complément à 2"], 
+                         1, wx.RA_SPECIFY_COLS
+                         )
+        
+        rb.SetToolTipString(u"Type de codage pour les nombres négatifs\n" \
+                            u" * Bit de signe : MSB = 0 -> positif\n" \
+                            u"                  MSB = 1 -> négatif\n" \
+                            u" * Complément à 1 :\n"\
+                            u" * Complément à 2 :\n")
+        
+        self.Bind(wx.EVT_RADIOBOX, self.EvtRadioBox, rb)
+        sbs.Add(rb, flag = wx.EXPAND|wx.ALL, border = 2)
+        
+        self.longMot = Variable(u"Longeur du mot", 8, bornes = [2, None])
+        lm = VariableCtrl(self, self.longMot, help = u"Nombre de bits des nombres binaires", sizeh = 30)
+        self.Bind(EVT_VAR_CTRL, self.OnVariableModified)
+        sbs.Add(lm, flag = wx.EXPAND|wx.ALL, border = 2)
+        self.lm = lm
+        
+#        cb = wx.CheckBox(self, -1, u"Automatique", style=wx.ALIGN_RIGHT)
+#        self.Bind(wx.EVT_CHECKBOX, self.EvtCheckBox, cb)
+#        sbs.Add(cb, flag = wx.EXPAND|wx.ALL, border = 2)
+        
+        
+        rbb = wx.RadioBox(
+                         self, -1, u"Affichage binaire", wx.DefaultPosition, wx.DefaultSize,
+                         [u"Brut",
+                          u"Longueur fixe",
+                          u"Avec séparateur"], 
+                         1, wx.RA_SPECIFY_COLS
+                         )
+        rbb.SetToolTipString(u"Type d'affichage des nombres binaires")
+        self.rbb = rbb
+        self.rbb.SetSelection(2)
+        self.Bind(wx.EVT_RADIOBOX, self.EvtRadioBoxAff, rbb)
         
         #
         #    Mise en place des éléments
@@ -1053,19 +1549,47 @@ class LogycConversion(wx.Panel):
         sizer.Add(l3, (2,0), flag = wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT)
         sizer.Add(t3, (2,1), flag = wx.EXPAND|wx.ALL|wx.ALIGN_CENTER, border = 2)
         sizer.Add(r3, (2,2), flag = wx.EXPAND|wx.ALL, border = 2)
+        sizer.Add(sbs, (3,0), (1,2), flag = wx.EXPAND|wx.ALL, border = 2)
+        sizer.Add(rbb, (3,2), flag = wx.EXPAND|wx.ALL, border = 2)
         
         sizer.AddGrowableCol(1)
-#        sizer.AddGrowableRow(2)
+        sizer.AddGrowableRow(3)
         
         self.SetSizerAndFit(sizer)
+        self.Bind(wx.EVT_SIZE, self.OnResize)
+        self.Layout()
         self.Refresh()
+        
         
         #
         # Initialisation
         #
-        self.expr = ExpressionDHB()
+        self.expr = ExpressionDHB(self)
+#        cb.SetValue(self.expr.longAuto)
+        rb.SetSelection(self.expr.typeNeg)
+        self.longMot.v = self.expr.long
+        lm.mofifierValeursSsEvt()
         
         
+        
+    ########################################################################################################
+    def GetFont(self):
+        return self.Parent.Parent.font
+    
+    ########################################################################################################
+    def EvtCheckBox(self, event):
+        self.expr.SetLongAuto(event.IsChecked())
+        self.MiseAJour()
+        
+    ########################################################################################################
+    def EvtRadioBox(self, event):
+        self.expr.SetTypeNeg(event.GetInt())
+        self.MiseAJour()
+    
+    ########################################################################################################
+    def EvtRadioBoxAff(self, event):
+        self.MiseAJour()    
+    
     ########################################################################################################
     def MiseAJour(self):
         self.dec.ChangeValue(self.expr.dec)
@@ -1073,7 +1597,8 @@ class LogycConversion(wx.Panel):
         self.bin.ChangeValue(self.expr.bin)
         self.rdec.ChangeValue(self.expr.GetEvalDec())
         self.rhex.ChangeValue(self.expr.GetEvalHex())
-        self.rbin.ChangeValue(self.expr.GetEvalBin())
+        self.rbin.ChangeValue(self.expr.GetEvalBin(self.rbb.GetSelection()))
+        self.OnResize()
         
     ########################################################################################################
     def Verifier(self, base, v = True):
@@ -1106,6 +1631,11 @@ class LogycConversion(wx.Panel):
         self.Verifier('bin', v)
 
     ########################################################################################################
+    def OnVariableModified(self, event):
+        self.expr.SetLong(event.GetVar().v)
+        self.MiseAJour()
+
+    ########################################################################################################
     def marquerValid(self, base, valid):
         """ Gestion de la couleur de fond des TextCtrl
             en fonction de la validité ou non de l'expression
@@ -1124,6 +1654,24 @@ class LogycConversion(wx.Panel):
         
         self.Refresh()
         
+    ########################################################################################################
+    def OnResize(self, event=None):
+        dc = wx.WindowDC(self)
+        font = wx.Font(FONT_SIZE, wx.FONTFAMILY_DEFAULT , wx.NORMAL, wx.NORMAL)
+        dc.SetFont(font)
+        width, height = dc.GetTextExtent(self.rbin.GetValue())
+
+        self.rbb.SetMinSize((width+8, -1))
+        self.Layout()
+        
+        
+    ######################################################################################################
+    def MiseAJourCtrlLong(self, l):
+        self.longMot.v = l
+        self.lm.mofifierValeursSsEvt()
+        
+        
+        
         
         
 #########################################################################################################
@@ -1139,15 +1687,15 @@ class PanelSaisie(wx.Panel):
         
         self.nom = nom
         self.parent = parent
-        font = wx.Font(FONT_SIZE, wx.FONTFAMILY_DEFAULT , wx.NORMAL, wx.NORMAL)
+        
         
         #
         #    Zones de saisie d'expressions
         #
         l1 = wx.StaticText(self, -1, nom+u" =")
-        l1.SetFont(font)
+        l1.SetFont(self.GetFont())
         t1 = wx.TextCtrl(self, -1, u"")
-        t1.SetFont(font)
+        t1.SetFont(self.GetFont())
         t1.SetToolTipString(u"Expression sous forme simple :\n" \
                             u"  not a   --> /a\n" \
                             u"  a and b --> a.b\n"\
@@ -1157,9 +1705,9 @@ class PanelSaisie(wx.Panel):
         self.Bind(wx.EVT_TEXT, self.EvtTextSmp, t1)
         
         l2 = wx.StaticText(self, -1, nom+u" =")
-        l2.SetFont(font)
+        l2.SetFont(self.GetFont())
         t2 = wx.TextCtrl(self, -1, u"")
-        t2.SetFont(font)
+        t2.SetFont(self.GetFont())
         t2.SetMinSize((200, -1))
         t2.SetToolTipString(u"Expression sous forme interprétable par python :\n" \
                             u" (ou exclusif = '^')")
@@ -1196,7 +1744,10 @@ class PanelSaisie(wx.Panel):
         
         self.SetSizerAndFit(sizer)
         
-        
+    
+    ########################################################################################################
+    def GetFont(self):
+        return self.parent.GetFont()
 
     ########################################################################################################
     def EvtTextSmp(self, event):
@@ -1216,7 +1767,7 @@ class PanelSaisie(wx.Panel):
         
     ########################################################################################################
     def MiseAJourBmp(self):
-        bmp = mathtext_to_wxbitmap(self.expr.math)
+        bmp = mathtext_to_wxbitmap(self.expr.math, FONT_EQ)
         if bmp == None: # L'expression n'est pas correcte !!!
             self.marquerValid(False)
         else:

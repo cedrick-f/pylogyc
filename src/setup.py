@@ -54,7 +54,7 @@ cible = Executable(
 
 
 setup(  name = "pyLogyc",
-        version = "0.2",
+        version = "0.3",
         author = "Cedrick FAURY",
         description = "Evaluation d'expressions logiques",
         options = {"build_exe": build_exe_options},
