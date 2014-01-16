@@ -17,7 +17,8 @@ shutil.rmtree("build", ignore_errors=True)
 #################################################################################################
 includefiles = [( matplotlib.get_data_path(),"mpl-data")]
 includefiles.extend([('Microsoft.VC90.CRT', "Microsoft.VC90.CRT"),
-                     'gpl.txt', 'gpl.txt'])
+                     'gpl.txt', 'gpl.txt',
+                     'pyLogyc_logo.ico'])
 
 # Dependencies are automatically detected, but it might need fine tuning.
 build_exe_options = {"packages": ["os"], 
@@ -54,7 +55,7 @@ cible = Executable(
 
 
 setup(  name = "pyLogyc",
-        version = "0.3",
+        version = "0.3.1",
         author = "Cedrick FAURY",
         description = "Evaluation d'expressions logiques",
         options = {"build_exe": build_exe_options},

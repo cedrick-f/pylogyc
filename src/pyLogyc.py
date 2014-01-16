@@ -34,7 +34,7 @@ Copyright (C) 2011-2012
 """
 __appname__= "pyLogyc"
 __author__ = u"Cédrick FAURY"
-__version__ = "0.3"
+__version__ = "0.3.1"
 
 #
 # Import des modules nécessaires
@@ -450,6 +450,7 @@ class ExpressionDHB():
         if self.dec == False:
             return False
         self.hex = self.GetHex()
+        return True
         
         
     ########################################################################################################
@@ -459,6 +460,7 @@ class ExpressionDHB():
         if self.dec == False:
             return False
         self.bin = self.GetBin()
+        return True
         
         
     ######################################################################################################
@@ -1607,7 +1609,7 @@ class LogycConversion(wx.Panel):
         
     ########################################################################################################
     def Verifier(self, base, v = True):
-        if self.expr.rdec == None or v == False:
+        if (hasattr(self.expr, 'rdec') and self.expr.rdec == None) or v == False:
             self.marquerValid(base, False)
         else:
             self.marquerValid(base, True)
