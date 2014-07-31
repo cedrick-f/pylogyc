@@ -28,13 +28,13 @@
 
 """
 pyLogyc.py
-Copyright (C) 2011-2012  
+Copyright (C) 2011-2014 
 @author: Cedrick FAURY
 
 """
 __appname__= "pyLogyc"
 __author__ = u"Cédrick FAURY"
-__version__ = "0.3.1"
+__version__ = "0.4"
 
 #
 # Import des modules nécessaires
@@ -42,10 +42,26 @@ __version__ = "0.3.1"
 
 # GUI
 import wx
+import wx.lib.hyperlink as hl
 
 from math import ceil
 # Calcul scientifique
 #import scipy
+
+from wx.lib.embeddedimage import PyEmbeddedImage
+
+#----------------------------------------------------------------------
+SmallUpArrow = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAADxJ"
+    "REFUOI1jZGRiZqAEMFGke2gY8P/f3/9kGwDTjM8QnAaga8JlCG3CAJdt2MQxDCAUaOjyjKMp"
+    "cRAYAABS2CPsss3BWQAAAABJRU5ErkJggg==")
+
+#----------------------------------------------------------------------
+SmallDnArrow = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAEhJ"
+    "REFUOI1jZGRiZqAEMFGke9QABgYGBgYWdIH///7+J6SJkYmZEacLkCUJacZqAD5DsInTLhDR"
+    "bcPlKrwugGnCFy6Mo3mBAQChDgRlP4RC7wAAAABJRU5ErkJggg==")
+
 
 #########################################################################################################
 #########################################################################################################
@@ -535,6 +551,8 @@ class ExpressionDHB():
                 l = max(l, len(bin(eval(s[d:f]))[2:]))
             except:
                 return False
+        if self.parent.radior.GetValue():
+            l += 1
         return l
         
         
@@ -542,6 +560,7 @@ class ExpressionDHB():
     def GetNeg(self):
         """ Renvoie la valeur "négative" du nombre
         """
+        self.parent.ForcerNeg()
         
         if self.typeNeg == 0: # Bit de signe
             l = self.GetLongMax()
@@ -614,6 +633,7 @@ class ExpressionDHB():
             n = self.GetNeg()
         else:
             n = self.rdec
+            self.parent.LibererNeg()
         
         return hex(n)[2:].upper()
     
@@ -631,6 +651,7 @@ class ExpressionDHB():
             n = self.GetNeg()
         else:
             n = self.rdec
+            self.parent.LibererNeg()
         
         if frmt == 0: # Format Brut
             return "{0:b}".format(n)
@@ -717,7 +738,7 @@ safe_list = ['not', 'and', 'or']
 safe_dict = dict([ (k, locals().get(k, None)) for k in safe_list ])
 
 # liste des fonctions et opérateurs "sûre"
-math_list = safe_list + ['*', '/', '+', '^', '-', '(', ')']
+math_list = safe_list + ['/', '+', '^', '(', ')']
 
 class Expression():
     """ Expression mathématique
@@ -1330,10 +1351,12 @@ class LogycFrame(wx.Frame):
         self.nb = wx.Notebook(self, -1)
         
         self.pageTable = LogycTable(self.nb) 
-        
         self.pageConvers = LogycConversion(self.nb)
+        self.pageAbout = LogycAbout(self.nb)
+        
         self.nb.AddPage(self.pageTable, u"Table de vérité")
         self.nb.AddPage(self.pageConvers, u"Conversion")
+        self.nb.AddPage(self.pageAbout, u"A propos ...")
         
         self.sizer = wx.BoxSizer()
         self.sizer.Add(self.nb, 1, flag = wx.EXPAND)
@@ -1378,8 +1401,12 @@ class LogycTable(wx.Panel):
         #
         #    Table de vérité
         #
-        self.table = wx.ListCtrl(self, -1, style=wx.LC_REPORT|wx.LC_HRULES|wx.LC_VRULES)
-        self.table.Bind(wx.EVT_SIZE, self.OnResize)
+        self.tableE = Table(self, -1, style=wx.LC_REPORT|wx.LC_HRULES|wx.LC_VRULES)
+        self.tableE.Bind(wx.EVT_SIZE, self.OnResize)
+        self.tableE.Bind(wx.EVT_LIST_BEGIN_DRAG  , self.OnChangeOrdre)
+   
+        self.tableS = Table(self, -1, style=wx.LC_REPORT|wx.LC_HRULES|wx.LC_VRULES)
+        self.tableS.Bind(wx.EVT_SIZE, self.OnResize)
         
         #
         #    Le panel pour les saisies d'expression
@@ -1395,7 +1422,8 @@ class LogycTable(wx.Panel):
         
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(sizerG, 1,flag = wx.EXPAND|wx.ALL, border = 2)
-        sizer.Add(self.table, flag = wx.GROW|wx.ALL, border = 2)
+        sizer.Add(self.tableE, flag = wx.EXPAND|wx.LEFT|wx.TOP|wx.BOTTOM, border = 2)
+        sizer.Add(self.tableS, flag = wx.EXPAND|wx.RIGHT|wx.TOP|wx.BOTTOM, border = 2)
         
         self.SetSizerAndFit(sizer)
         self.Layout()
@@ -1409,40 +1437,176 @@ class LogycTable(wx.Panel):
     def GetFont(self):
         return self.Parent.Parent.font
     
-    ########################################################################################################
-    def MiseAJourTable(self, nomE, nomS, E, S):
-        self.table.ClearAll()
-        
-        self.table.SetFont(self.GetFont())
-        
-        for i, n in enumerate(nomE):
-            self.table.InsertColumn(i, n)
-            self.table.SetColumnWidth(i, wx.LIST_AUTOSIZE)
-        self.table.InsertColumn(len(nomE), nomS)
-        self.table.SetColumnWidth(len(nomE), wx.LIST_AUTOSIZE)
-        
+#    ########################################################################################################
+#    def MiseAJourTable(self, nomE, nomS, E, S):
+#        print E
+#        self.tableE.DeleteAllItems()
+#        self.tableS.DeleteAllItems()
+#        
+##        self.tableE.SetFont(self.GetFont())
+##        self.tableS.SetFont(self.GetFont())
+#        
+#        for i, n in enumerate(nomE):
+#            self.tableE.AppendTextColumn(n, width=20)
+#        self.tableS.AppendTextColumn(nomS, width=20)
+#
+#
 #        font = wx.Font(FONT_SIZE, wx.FONTFAMILY_DEFAULT , wx.NORMAL, wx.BOLD)
-        for i, e in enumerate(E):
-            pos = self.table.InsertStringItem(i, str(e[0]))
-            for j in range(len(e)-1):
-                self.table.SetStringItem(pos, j+1, str(e[j+1]))
-            self.table.SetStringItem(pos, len(e), str(S[i]))
-            
-#            self.table.SetItemFont(pos, font)
-        
-        
-        self.table.Layout()
-        self.OnResize()
-        self.Fit()
+#        
+#        for i, e in enumerate(E):
+#            
+#            self.tableE.AppendItem([str(k) for k in e])
+#            
+#            
+##            for j in range(len(e)-1):
+##                self.tableE.SetStringItem(pos, j+1, str(e[j+1]))
+##            self.tableS.InsertItem(i, str(S[i]))
+##            self.tableS.SetItemFont(pos, font)
+#            
+##            if i % 2:
+##                self.tableE.SetItemBackgroundColour(i, "white")
+##                self.tableS.SetItemBackgroundColour(i, "white")
+##            else:
+##                self.tableE.SetItemBackgroundColour(i, wx.Colour(230,230,240))
+##                self.tableS.SetItemBackgroundColour(i, wx.Colour(230,230,240))
+#                
+#                
+#        
+#        self.Layout()
+##        self.OnResize()
+#        self.Layout()
+##        self.Fit()
+#        self.Parent.Parent.Fit()
+#        self.Refresh()
 
+########################################################################################################
+    def MiseAJourTable(self, nomE, nomS, E, S):
+        self.tableE.ClearAll()
+        self.tableS.ClearAll()
+        
+        self.tableE.SetFont(self.GetFont())
+        self.tableS.SetFont(self.GetFont())
+        
+        self.tableE.InsertColumn(0, nomS)
+        self.tableE.SetColumnWidth(0, wx.LIST_AUTOSIZE_USEHEADER)
+        for i, n in enumerate(nomE):
+            self.tableE.InsertColumn(i+1, n)
+            self.tableE.SetColumnWidth(i+1, wx.LIST_AUTOSIZE_USEHEADER)
+            
+        self.tableE.DeleteColumn(0)
+        
+        self.tableS.InsertColumn(0, nomS)
+        self.tableS.SetColumnWidth(0, wx.LIST_AUTOSIZE_USEHEADER )
+        self.tableS.InsertColumn(1, nomS)
+        self.tableS.SetColumnWidth(1, wx.LIST_AUTOSIZE_USEHEADER )
+        self.tableS.DeleteColumn(0)
+        
+        font = wx.Font(FONT_SIZE, wx.FONTFAMILY_DEFAULT , wx.NORMAL, wx.BOLD)
+        for i, e in enumerate(E):
+            pos = self.tableE.InsertStringItem(i, str(e[0]))
+            for j in range(len(e)-1):
+                self.tableE.SetStringItem(pos, j+1, str(e[j+1]))
+            self.tableS.InsertStringItem(i, str(S[i]))
+            self.tableS.SetItemFont(pos, font)
+            
+            if i % 2:
+                self.tableE.SetItemBackgroundColour(i, "white")
+                self.tableS.SetItemBackgroundColour(i, "white")
+            else:
+                self.tableE.SetItemBackgroundColour(i, wx.Colour(230,230,240))
+                self.tableS.SetItemBackgroundColour(i, wx.Colour(230,230,240))
+                
+#        self.tableE.InitColumnSorterMixin()
+                
+        self.Layout()
+        self.OnResize()
+        self.Layout()
+        self.Fit()
+        self.Parent.Parent.Fit()
+        self.Refresh()
+        
+        
+        
     ########################################################################################################
     def OnResize(self, event=None):
         height = int(2*FONT_SIZE)
-        for indx in xrange(self.table.GetItemCount()):
-            height += self.table.GetItemRect(indx).height
-        self.table.SetMinSize((-1, height))
+        for indx in xrange(self.tableE.GetItemCount()):
+            height += self.tableE.GetItemRect(indx).height
+        self.SetMinSize((-1, height))
+      
+
+        
+    ########################################################################################################
+    def OnChangeOrdre(self, event=None):   
+        print "OnChangeOrdre"
         
         
+        
+         
+#########################################################################################################
+#########################################################################################################
+#
+#  Fenêtre table de vérité
+#
+#########################################################################################################
+#########################################################################################################    
+class LogycAbout(wx.Panel):
+    def __init__(self, parent):
+
+        wx.Panel.__init__(self, parent, -1)
+
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        texte = wx.StaticText(self, -1, u"pyLogyc "+ __version__)
+        sizer.Add(texte, flag =wx.ALL, border = 5)
+        font = wx.Font(18, wx.SWISS, wx.NORMAL, wx.NORMAL)
+        texte.SetFont(font)
+        
+        texte = wx.StaticText(self, -1, u"Auteur : Cédrick FAURY")
+        sizer.Add(texte, flag = wx.ALL, border = 5)
+        font = wx.Font(11, wx.SWISS, wx.NORMAL, wx.NORMAL)
+        texte.SetFont(font)
+        
+        texte = wx.StaticText(self, -1, u"Informations et téléchargement :")
+        sizer.Add(texte, flag = wx.TOP|wx.LEFT, border = 5)
+        font = wx.Font(11, wx.SWISS, wx.NORMAL, wx.NORMAL)
+        texte.SetFont(font)
+        
+        sizer.Add(hl.HyperLinkCtrl(self, wx.ID_ANY, u"http://code.google.com/p/pylogyc/",
+                                   URL="http://code.google.com/p/pylogyc/"),  
+                  flag = wx.ALL, border = 2)
+        
+        # licence
+        #---------
+        texte = wx.StaticText(self, -1, u"Licence :")
+        sizer.Add(texte, flag = wx.TOP|wx.LEFT, border = 5)
+        font = wx.Font(11, wx.SWISS, wx.NORMAL, wx.NORMAL)
+        texte.SetFont(font)
+        try:
+            txt = open("gpl.txt")
+            lictext = txt.read()
+            txt.close()
+        except:
+            lictext = u"Le fichier de licence (gpl.txt) est introuvable !\n\n" \
+                      u"Veuillez réinstaller pyLogyc !"
+            messageErreur(self, u'Licence introuvable',
+                          lictext)
+            
+            
+        texte = wx.TextCtrl(self, -1, lictext, size = (400, -1), 
+                    style = wx.TE_READONLY|wx.TE_MULTILINE|wx.BORDER_NONE )
+        
+        sizer.Add(texte, 1, flag = wx.EXPAND|wx.TOP|wx.LEFT, border = 5)
+        
+        
+        self.SetSizerAndFit(sizer)
+        self.Layout()
+        self.Refresh()
+        
+#        self.sizer = wx.BoxSizer(wx.HORIZONTAL)
+#        self.sizer.Add(panel, 1 , flag = wx.EXPAND)
+#        self.SetSizerAndFit(self.sizer)
+
 
 #########################################################################################################
 #########################################################################################################
@@ -1498,10 +1662,17 @@ class LogycConversion(wx.Panel):
         r3.SetToolTipString(u"Résultat sous forme binaire")
         self.rbin = r3
         
+        sb = wx.StaticBox(self, -1, u"Codage des nombres")
+        sbrn = wx.StaticBoxSizer(sb, wx.VERTICAL)
         
-        
-        sb = wx.StaticBox(self, -1, u"Représentation des nombres négatifs")
-        sbs = wx.StaticBoxSizer(sb, wx.VERTICAL)
+        radion = wx.RadioButton( self, -1, "Naturels", style = wx.RB_GROUP )
+        radior = wx.RadioButton( self, -1, "Relatifs" )
+        sbrn.Add(radion, flag = wx.EXPAND|wx.ALL, border = 3)
+        sbrn.Add(radior, flag = wx.EXPAND|wx.ALL, border = 3)
+        self.Bind(wx.EVT_RADIOBUTTON, self.OnGroupSelect, radion )
+        self.Bind(wx.EVT_RADIOBUTTON, self.OnGroupSelect, radior )
+        self.radior = radior
+        self.radion = radion
         
         rb = wx.RadioBox(
                          self, -1, u"Code", wx.DefaultPosition, wx.DefaultSize,
@@ -1510,22 +1681,15 @@ class LogycConversion(wx.Panel):
                           u"Complément à 2"], 
                          1, wx.RA_SPECIFY_COLS
                          )
-        
         rb.SetToolTipString(u"Type de codage pour les nombres négatifs\n" \
                             u" * Bit de signe : MSB = 0 -> positif\n" \
                             u"                  MSB = 1 -> négatif\n" \
                             u" * Complément à 1 :\n"\
                             u" * Complément à 2 :\n")
-        
         self.Bind(wx.EVT_RADIOBOX, self.EvtRadioBox, rb)
-        sbs.Add(rb, flag = wx.EXPAND|wx.ALL, border = 2)
-        
-        self.longMot = Variable(u"Longeur du mot", 8, bornes = [2, None])
-        lm = VariableCtrl(self, self.longMot, help = u"Nombre de bits des nombres binaires", sizeh = 30)
-        self.Bind(EVT_VAR_CTRL, self.OnVariableModified)
-        sbs.Add(lm, flag = wx.EXPAND|wx.ALL, border = 2)
-        self.lm = lm
-        
+        self.sbr = rb
+        self.sbr.Enable(False)
+        sbrn.Add(rb, flag = wx.EXPAND)
 #        cb = wx.CheckBox(self, -1, u"Automatique", style=wx.ALIGN_RIGHT)
 #        self.Bind(wx.EVT_CHECKBOX, self.EvtCheckBox, cb)
 #        sbs.Add(cb, flag = wx.EXPAND|wx.ALL, border = 2)
@@ -1543,6 +1707,17 @@ class LogycConversion(wx.Panel):
         self.rbb.SetSelection(2)
         self.Bind(wx.EVT_RADIOBOX, self.EvtRadioBoxAff, rbb)
         
+        sblm = wx.StaticBox(self, -1, u"Longeur du mot")
+        sbslm = wx.StaticBoxSizer(sblm, wx.HORIZONTAL)
+        self.longMot = Variable(u"", 8, bornes = [2, None])
+        self.lm = VariableCtrl(self, self.longMot, help = u"Nombre de bits des nombres binaires", 
+                               sizeh = 30, signeEgal = False)
+        self.Bind(EVT_VAR_CTRL, self.OnVariableModified)
+        
+        sbslm.Add(self.lm, flag = wx.EXPAND|wx.ALL, border = 2)
+        sbslm.Add(wx.StaticText(self, -1, u"bits"), flag = wx.EXPAND|wx.ALL|wx.ALIGN_CENTER_VERTICAL, border = 2)
+        
+        
         #
         #    Mise en place des éléments
         #
@@ -1556,8 +1731,9 @@ class LogycConversion(wx.Panel):
         sizer.Add(l3, (2,0), flag = wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT)
         sizer.Add(t3, (2,1), flag = wx.EXPAND|wx.ALL|wx.ALIGN_CENTER, border = 2)
         sizer.Add(r3, (2,2), flag = wx.EXPAND|wx.ALL, border = 2)
-        sizer.Add(sbs, (3,0), (1,2), flag = wx.EXPAND|wx.ALL, border = 2)
+        sizer.Add(sbrn, (3,0), (2,2), flag = wx.EXPAND|wx.ALL, border = 2)
         sizer.Add(rbb, (3,2), flag = wx.EXPAND|wx.ALL, border = 2)
+        sizer.Add(sbslm, (4,2), flag = wx.EXPAND|wx.ALL, border = 2)
         
         sizer.AddGrowableCol(1)
         sizer.AddGrowableRow(3)
@@ -1575,7 +1751,7 @@ class LogycConversion(wx.Panel):
 #        cb.SetValue(self.expr.longAuto)
         rb.SetSelection(self.expr.typeNeg)
         self.longMot.v = self.expr.long
-        lm.mofifierValeursSsEvt()
+        self.lm.mofifierValeursSsEvt()
         
         
         
@@ -1593,6 +1769,16 @@ class LogycConversion(wx.Panel):
         self.expr.SetTypeNeg(event.GetInt())
         self.MiseAJour()
     
+    ########################################################################################################
+    def OnGroupSelect( self, event = None ):
+        if event == None:
+            radio_selected = self.radior
+        else:
+            radio_selected = event.GetEventObject()
+        R = radio_selected.GetLabel()[0] == "R"
+        self.sbr.Enable(R)
+#        self.lm.Enable(R)
+                
     ########################################################################################################
     def EvtRadioBoxAff(self, event):
         self.MiseAJour()    
@@ -1677,9 +1863,17 @@ class LogycConversion(wx.Panel):
         self.longMot.v = l
         self.lm.mofifierValeursSsEvt()
         
+    
+    ######################################################################################################
+    def ForcerNeg(self):
+        if not self.radior.GetValue():
+            self.radior.SetValue(True)
+            self.OnGroupSelect()
+        self.radion.Enable(False)
         
-        
-        
+    ######################################################################################################
+    def LibererNeg(self):
+        self.radion.Enable(True)
         
 #########################################################################################################
 #########################################################################################################
@@ -1844,6 +2038,58 @@ def CopierBitmap(bmp):
     wx.TheClipboard.Close()    
     
     
+#############################################################################################################
+def messageErreur(parent, titre, message):
+    dlg = wx.MessageDialog(parent, message, titre,
+                           wx.OK | wx.ICON_WARNING)
+    dlg.ShowModal()
+    dlg.Destroy()
+    
+    
+    
+    
+#########################################################################################################
+#########################################################################################################
+#
+#  Panel pour les saisies d'expression
+#
+#########################################################################################################
+#########################################################################################################
+from wx.lib.mixins.listctrl import ListCtrlAutoWidthMixin
+from wx.lib.mixins.listctrl import ColumnSorterMixin 
+#import wx.dataview as dv
+class Table(wx.ListCtrl, ListCtrlAutoWidthMixin):#, ColumnSorterMixin ):
+    def __init__(self, parent, id, style):
+        wx.ListCtrl.__init__(self, parent, id, style=style)
+#        print dir(self)
+#        print self.DropTarget
+#        print self.GetDropTarget()
+#        print self.GetContainingSizer()
+#        print self.GetEventHandler()
+#        print self.GetMainWindow()
+#        print self.GetMainWindowOfCompositeControl()
+#        print self.HandleWindowEvent
+        
+#        self.il = wx.ImageList(16, 16)
+#
+#        self.sm_up = self.il.Add(SmallUpArrow.GetBitmap())
+#        self.sm_dn = self.il.Add(SmallDnArrow.GetBitmap())
+        
+        ListCtrlAutoWidthMixin.__init__(self)
+        
+        
+#    def InitColumnSorterMixin(self):
+#        ColumnSorterMixin.__init__(self, 0)
+        
+#    # Used by the ColumnSorterMixin, see wx/lib/mixins/listctrl.py
+#    def GetListCtrl(self):
+#        return self
+#
+#    # Used by the ColumnSorterMixin, see wx/lib/mixins/listctrl.py
+#    def GetSortImages(self):
+#        return (self.sm_dn, self.sm_up)
+    
+    
 #########################################################################################################
 #########################################################################################################
 #
@@ -1863,4 +2109,4 @@ if __name__ == '__main__':
     app = LogycApp(False)
     app.MainLoop()
 
-    
+
