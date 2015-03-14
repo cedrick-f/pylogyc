@@ -34,7 +34,7 @@ Copyright (C) 2011-2014
 """
 __appname__= "pyLogyc"
 __author__ = u"Cédrick FAURY"
-__version__ = "0.4"
+__version__ = "0.5"
 
 #
 # Import des modules nécessaires
@@ -965,29 +965,34 @@ class Expression():
             self.vari[n].v = v
     
     #########################################################################################################
-    def getTableVerite(self, **args):
+    def getTableVerite(self, noms = None):
         """ Renvoie la table de vérité de l'expression sous la forme :
              - E : Entrées = [[valeurs possibles 1ère variable], ... [valeurs possibles nième variable]] (0 ou 1)
              - S : Sortie =  [valeurs de sortie]
             Les variables sont classées par ordre alphabétique.
         """ 
-        E = [[eval(l) for l in int2bin(n, len(self.vari))] for n in range(2**len(self.vari))]
-#        print "entrées", E
-        S = []
-        l = self.vari.keys()
-        l.sort()
-#        print "nvari", l
-        for i, e in enumerate(E):
-            for i, n in enumerate(l):
-                self.vari[n].v = e[i]
-            v = self.evaluer()
-#            print "valeur", v
-            if v == None:
-                return False, False
-            else:
-                S.append(v)
-#        print "sortie", S
-        return E,S
+        return TableDeVerite(self, noms)
+    
+#        E = [[eval(l) for l in int2bin(n, len(self.vari))] for n in range(2**len(self.vari))]
+##        print "entrées", E
+#        S = []
+#        if noms == None:
+#            l = self.vari.keys()
+#            l.sort()
+#        else:
+#            l = noms
+##        print "nvari", l
+#        for i, e in enumerate(E):
+#            for i, n in enumerate(l):
+#                self.vari[n].v = e[i]
+#            v = self.evaluer()
+##            print "valeur", v
+#            if v == None:
+#                return False, False
+#            else:
+#                S.append(v)
+##        print "sortie", S
+#        return E,S
         
             
     #########################################################################################################        
@@ -1002,6 +1007,37 @@ class Expression():
         """
         return self.math
     
+class TableDeVerite():
+    def __init__(self, expression = None, nomsEntree = None):
+        self.nomsEntree = nomsEntree
+        if expression != None:
+            self.evaluer(expression, nomsEntree)
+        
+    def evaluer(self, expression, nomsEntree = None):
+        self.E = [[eval(l) for l in int2bin(n, len(expression.vari))] for n in range(2**len(expression.vari))]
+#        print "entrées", E
+        self.S = []
+        if nomsEntree == None:
+            l = expression.vari.keys()
+            l.sort()
+            if self.nomsEntree != None and l == sorted(self.nomsEntree):
+                l = self.nomsEntree
+        else:
+            l = nomsEntree
+        self.nomsEntree = l
+#        print "nvari", l
+        for i, e in enumerate(self.E):
+            for i, n in enumerate(l):
+                expression.vari[n].v = e[i]
+            v = expression.evaluer()
+#            print "valeur", v
+            if v != None:
+                self.S.append(v)
+            else:
+                self.S = False
+                self.E = False
+                return
+                
 
 def int2bin(n, count=24):
     """returns the binary of integer n, using count number of digits"""
@@ -1401,33 +1437,44 @@ class LogycTable(wx.Panel):
         #
         #    Table de vérité
         #
-        self.tableE = Table(self, -1, style=wx.LC_REPORT|wx.LC_HRULES|wx.LC_VRULES)
-        self.tableE.Bind(wx.EVT_SIZE, self.OnResize)
-        self.tableE.Bind(wx.EVT_LIST_BEGIN_DRAG  , self.OnChangeOrdre)
+        self.panelTable = wx.Panel(self, -1, style = wx.BORDER_RAISED)
+        self.tableE = Table(self.panelTable, -1, style=wx.LC_REPORT|wx.LC_HRULES|wx.LC_VRULES)
+#        self.tableE.Bind(wx.EVT_SIZE, self.OnResize)
+        self.tableE.Bind(wx.EVT_LIST_COL_END_DRAG  , self.OnChangeOrdre) #EVT_LIST_BEGIN_DRAG  EVT_LIST_COL_CLICK
    
-        self.tableS = Table(self, -1, style=wx.LC_REPORT|wx.LC_HRULES|wx.LC_VRULES)
-        self.tableS.Bind(wx.EVT_SIZE, self.OnResize)
+        self.tableS = Table(self.panelTable, -1, style=wx.LC_REPORT|wx.LC_HRULES|wx.LC_VRULES)
+#        self.tableS.Bind(wx.EVT_SIZE, self.OnResize)
+        sizerP = wx.BoxSizer(wx.HORIZONTAL)
+        sizerP.Add(self.tableE, flag = wx.EXPAND|wx.LEFT|wx.TOP|wx.BOTTOM, border = 2)
+        sizerP.Add(self.tableS, flag = wx.EXPAND|wx.RIGHT|wx.TOP|wx.BOTTOM, border = 2)
+        self.panelTable.SetSizer(sizerP)
+        
         
         #
         #    Le panel pour les saisies d'expression
         #
-        panelSaisie = PanelSaisie(self)
+        self.panelSaisie = PanelSaisie(self)
         
         #
         #    Mise en place des éléments
         #
         sizerG = wx.BoxSizer(wx.VERTICAL)
-        sizerG.Add(panelSaisie, flag = wx.EXPAND|wx.ALL, border = 2)
+        sizerG.Add(self.panelSaisie, flag = wx.EXPAND|wx.ALL, border = 2)
 #        sizerG.Add(button, flag = wx.ALL, border = 2)
+#        sizerD = wx.BoxSizer(wx.VERTICAL)
+#        sizerD.Add(self.panelTable, flag = wx.ALL, border = 2)
         
         sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(sizerG, 1,flag = wx.EXPAND|wx.ALL, border = 2)
-        sizer.Add(self.tableE, flag = wx.EXPAND|wx.LEFT|wx.TOP|wx.BOTTOM, border = 2)
-        sizer.Add(self.tableS, flag = wx.EXPAND|wx.RIGHT|wx.TOP|wx.BOTTOM, border = 2)
+        sizer.Add(sizerG, 1, flag = wx.EXPAND|wx.ALL, border = 2)
+        sizer.Add(self.panelTable, 0, flag = wx.ALL, border = 2)
+#        sizer.Add(self.tableE, flag = wx.EXPAND|wx.LEFT|wx.TOP|wx.BOTTOM, border = 2)
+#        sizer.Add(self.tableS, flag = wx.EXPAND|wx.RIGHT|wx.TOP|wx.BOTTOM, border = 2)
         
-        self.SetSizerAndFit(sizer)
-        self.Layout()
+        self.SetSizer(sizer)
+#        self.Layout()
         self.Refresh()
+        
+#        self.Bind(wx.EVT_SIZE, self.OnResize)
         
 #        self.sizer = wx.BoxSizer(wx.HORIZONTAL)
 #        self.sizer.Add(panel, 1 , flag = wx.EXPAND)
@@ -1480,7 +1527,10 @@ class LogycTable(wx.Panel):
 #        self.Refresh()
 
 ########################################################################################################
-    def MiseAJourTable(self, nomE, nomS, E, S):
+    def MiseAJourTable(self, nomS, table):
+        self.table = table
+        self.nomS = nomS
+        
         self.tableE.ClearAll()
         self.tableS.ClearAll()
         
@@ -1489,7 +1539,7 @@ class LogycTable(wx.Panel):
         
         self.tableE.InsertColumn(0, nomS)
         self.tableE.SetColumnWidth(0, wx.LIST_AUTOSIZE_USEHEADER)
-        for i, n in enumerate(nomE):
+        for i, n in enumerate(table.nomsEntree):
             self.tableE.InsertColumn(i+1, n)
             self.tableE.SetColumnWidth(i+1, wx.LIST_AUTOSIZE_USEHEADER)
             
@@ -1502,11 +1552,11 @@ class LogycTable(wx.Panel):
         self.tableS.DeleteColumn(0)
         
         font = wx.Font(FONT_SIZE, wx.FONTFAMILY_DEFAULT , wx.NORMAL, wx.BOLD)
-        for i, e in enumerate(E):
+        for i, e in enumerate(table.E):
             pos = self.tableE.InsertStringItem(i, str(e[0]))
             for j in range(len(e)-1):
                 self.tableE.SetStringItem(pos, j+1, str(e[j+1]))
-            self.tableS.InsertStringItem(i, str(S[i]))
+            self.tableS.InsertStringItem(i, str(table.S[i]))
             self.tableS.SetItemFont(pos, font)
             
             if i % 2:
@@ -1519,26 +1569,59 @@ class LogycTable(wx.Panel):
 #        self.tableE.InitColumnSorterMixin()
                 
         self.Layout()
-        self.OnResize()
-        self.Layout()
-        self.Fit()
-        self.Parent.Parent.Fit()
+        h = max(self.tableE.GetHeight2(), self.tableS.GetHeight2())+4
+        w = self.tableE.GetWidth2() + self.tableS.GetWidth2()+4+6
+#        print "W, h = ", w, h
+        self.panelTable.SetMinClientSize((w, h))
+        self.panelTable.SetClientSize((w, h))
+        self.panelTable.SetMinSize(self.panelTable.GetSize())
+        
+        self.SetMinClientSize((-1, self.panelTable.GetSize()[1]))
+        self.SetClientSize((self.GetClientSize()[0], self.panelTable.GetSize()[1]))
+#        self.OnResize()
+#        self.Layout()
+#        self.Layout()
+#        self.Fit()
+#        self.Parent.Parent.Fit()
         self.Refresh()
         
         
         
     ########################################################################################################
     def OnResize(self, event=None):
-        height = int(2*FONT_SIZE)
-        for indx in xrange(self.tableE.GetItemCount()):
-            height += self.tableE.GetItemRect(indx).height
-        self.SetMinSize((-1, height))
+        print "OnResize"
+        se = self.tableE.GetHeight2()
+        sh = self.tableS.GetHeight2()
+        print se, sh, self.tableE.GetClientSize(), self.tableS.GetClientSize()
+        
+        print self.tableE.GetVirtualSize()
+#        self.panelTable.Layout()
+#        self.panelTable.SetMinClientSize(self.tableE.GetClientSize())
+    
+#        height = int(2*FONT_SIZE)
+#        for indx in xrange(self.tableE.GetItemCount()):
+#            height += self.tableE.GetItemRect(indx).height
+#        print height
+#        self.SetMinSize((-1, height))
       
 
         
     ########################################################################################################
     def OnChangeOrdre(self, event=None):   
         print "OnChangeOrdre"
+        self.nomE = []
+        for col in range(self.tableE.GetColumnCount()):
+            self.nomE.append(self.tableE.GetColumn(self.tableE.GetColumnOrder(col)).GetText())
+        self.panelSaisie.MiseAJourTable(self.nomE)
+#        ln = []
+#        for n in ordre:
+#            if n in self.nom:
+#                ln.append(n)
+#        for n in self.nom:
+#            if not n in ln:
+#                ln.append(n)
+#        self.nom = ln
+            
         
         
         
@@ -1992,19 +2075,26 @@ class PanelSaisie(wx.Panel):
         self.Refresh()
         
     ########################################################################################################
-    def MiseAJourTable(self):
-        E, S = self.expr.getTableVerite()
-        if E == False:
+    def MiseAJourTable(self, noms = None):
+        
+#        if noms == None:
+#            l = self.expr.vari.keys()
+#            l.sort()
+#        else:
+#            l = noms
+            
+        table = self.expr.getTableVerite(noms)
+
+        if table.E == False:
             self.marquerValid(False)
             return
         else:
             self.marquerValid(True)
             
-        l = self.expr.vari.keys()
-        l.sort()
         
-        if len(E) > 0 and len(E[0]) > 0:
-            self.parent.MiseAJourTable(l, self.nom, E, S)
+        
+        if len(table.E) > 0 and len(table.E[0]) > 0:
+            self.parent.MiseAJourTable(self.nom, table)
             self.marquerValid(True)
         else:
             self.marquerValid(False)
@@ -2061,35 +2151,23 @@ from wx.lib.mixins.listctrl import ColumnSorterMixin
 class Table(wx.ListCtrl, ListCtrlAutoWidthMixin):#, ColumnSorterMixin ):
     def __init__(self, parent, id, style):
         wx.ListCtrl.__init__(self, parent, id, style=style)
-#        print dir(self)
-#        print self.DropTarget
-#        print self.GetDropTarget()
-#        print self.GetContainingSizer()
-#        print self.GetEventHandler()
-#        print self.GetMainWindow()
-#        print self.GetMainWindowOfCompositeControl()
-#        print self.HandleWindowEvent
-        
-#        self.il = wx.ImageList(16, 16)
-#
-#        self.sm_up = self.il.Add(SmallUpArrow.GetBitmap())
-#        self.sm_dn = self.il.Add(SmallDnArrow.GetBitmap())
-        
         ListCtrlAutoWidthMixin.__init__(self)
         
-        
-#    def InitColumnSorterMixin(self):
-#        ColumnSorterMixin.__init__(self, 0)
-        
-#    # Used by the ColumnSorterMixin, see wx/lib/mixins/listctrl.py
-#    def GetListCtrl(self):
-#        return self
-#
-#    # Used by the ColumnSorterMixin, see wx/lib/mixins/listctrl.py
-#    def GetSortImages(self):
-#        return (self.sm_dn, self.sm_up)
     
+    def GetHeight2(self):
+        height = int(2*FONT_SIZE)
+        for indx in xrange(self.GetItemCount()):
+            height += self.GetItemRect(indx).height
+#        self.SetMinClientSize((-1, height))
+#        self.SetMinSize((-1, height))
+        return height
     
+    def GetWidth2(self):
+#        print "GetWidth2"
+#        print "  ", self.GetColumnWidth(0)
+#        print "  ", self.GetViewRect()
+        return self.GetViewRect()[2]
+     
 #########################################################################################################
 #########################################################################################################
 #
@@ -2099,7 +2177,7 @@ class Table(wx.ListCtrl, ListCtrlAutoWidthMixin):#, ColumnSorterMixin ):
 #########################################################################################################    
 class LogycApp(wx.App):
     def OnInit(self):
-        frame = LogycFrame(None, -1, u"pyLogyc")
+        frame = LogycFrame(None, -1, u"pyLogyc "+__version__)
         frame.Show()
         self.SetTopWindow(frame)
         return True

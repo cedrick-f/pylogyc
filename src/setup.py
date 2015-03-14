@@ -55,9 +55,9 @@ cible = Executable(
 
 
 setup(  name = "pyLogyc",
-        version = "0.3.1",
+        version = "0.5.0",
         author = "Cedrick FAURY",
-        description = "Evaluation d'expressions logiques",
+        description = "pyLogic",
         options = {"build_exe": build_exe_options},
 #        include-msvcr = True,
         executables = [cible])
