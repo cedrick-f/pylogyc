@@ -1,4 +1,5 @@
-#pyLogyc![ressources/pyLogyc_logo.png](ressources/pyLogyc_logo.png)
+#![ressources/pyLogyc_logo.png](ressources/pyLogyc_logo.png)pyLogyc
+
 _**pyLogyc**_ permet :
   * d'évaluer des **expressions logiques** sous forme de _table de vérité_,
   * de les afficher et de les copier/coller dans un format _image_ ou bien _[LaTeX](http://www.latex-project.org/)_ (pour les insérer dans un traitement de texte par exemple).
